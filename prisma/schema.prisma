@@ -1,0 +1,262 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// status: ATIVO | INATIVO | TRANSFERIDO | FALECIDO
+// formaAdmissao: BATISMO | TRANSFERENCIA | RECONCILIACAO | ACLAMACAO
+model Membro {
+  id                Int       @id @default(autoincrement())
+  nomeCompleto      String
+  apelido           String?
+  fotoUrl           String?
+  dataNascimento    DateTime?
+  sexo              String?
+  estadoCivil       String?
+  naturalidade      String?
+  nacionalidade     String?   @default("Brasileira")
+  rg                String?
+  cpf               String?   @unique
+  cep               String?
+  endereco          String?
+  numeroCasa        String?
+  bairro            String?
+  cidade            String?
+  uf                String?
+  telefone          String?
+  celular           String?
+  email             String?
+  profissao         String?
+  escolaridade      String?
+  nomeConjuge       String?
+  nomePai           String?
+  nomeMae           String?
+  dataConversao     DateTime?
+  dataAdmissao      DateTime?
+  formaAdmissao     String?
+  congregacaoId     Int
+  congregacao       Congregacao @relation(fields: [congregacaoId], references: [id])
+  cargoId           Int?
+  cargo             Cargo?      @relation(fields: [cargoId], references: [id])
+  status            String      @default("ATIVO")
+  dataSaida         DateTime?
+  motivoSaida       String?
+  observacoes       String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  cargoHistorico           CargoHistorico[]
+  batismos                 Batismo[]
+  cursosConcluidos         CursoConclusao[]
+  documentos                Documento[]
+  cartasRecomendacao       CartaRecomendacao[]
+  cartasMudanca            CartaMudanca[]
+  apresentacoesResponsavel ApresentacaoCrianca[]
+  eventosResponsavel       EventoAgenda[]
+  userAccount              User?
+}
+
+model Congregacao {
+  id                Int       @id @default(autoincrement())
+  nome              String
+  matriz            Boolean   @default(false)
+  endereco          String?
+  cidade            String?
+  uf                String?
+  telefone          String?
+  pastorResponsavel String?
+  dataFundacao      DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  membros              Membro[]
+  users                User[]
+  cargoHistoricos      CargoHistorico[]
+  batismos             Batismo[]
+  apresentacoes        ApresentacaoCrianca[]
+  eventos              EventoAgenda[]
+  cartasMudancaOrigem  CartaMudanca[]        @relation("CartaMudancaOrigem")
+  cartasMudancaDestino CartaMudanca[]        @relation("CartaMudancaDestino")
+}
+
+model Cargo {
+  id        Int      @id @default(autoincrement())
+  nome      String   @unique
+  ordem     Int      @default(0)
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  membros   Membro[]
+  historico CargoHistorico[]
+}
+
+model CargoHistorico {
+  id            Int          @id @default(autoincrement())
+  membroId      Int
+  membro        Membro       @relation(fields: [membroId], references: [id])
+  cargoId       Int
+  cargo         Cargo        @relation(fields: [cargoId], references: [id])
+  congregacaoId Int?
+  congregacao   Congregacao? @relation(fields: [congregacaoId], references: [id])
+  dataInicio    DateTime
+  dataFim       DateTime?
+  observacao    String?
+  createdAt     DateTime     @default(now())
+}
+
+model Batismo {
+  id            Int          @id @default(autoincrement())
+  membroId      Int
+  membro        Membro       @relation(fields: [membroId], references: [id])
+  data          DateTime
+  local         String?
+  oficiante     String?
+  testemunhas   String?
+  congregacaoId Int?
+  congregacao   Congregacao? @relation(fields: [congregacaoId], references: [id])
+  createdAt     DateTime     @default(now())
+}
+
+model ApresentacaoCrianca {
+  id             Int          @id @default(autoincrement())
+  nomeCrianca    String
+  dataNascimento DateTime?
+  nomePai        String?
+  nomeMae        String?
+  data           DateTime
+  oficiante      String?
+  congregacaoId  Int?
+  congregacao    Congregacao? @relation(fields: [congregacaoId], references: [id])
+  responsavelId  Int?
+  responsavel    Membro?      @relation(fields: [responsavelId], references: [id])
+  observacoes    String?
+  createdAt      DateTime     @default(now())
+}
+
+model Curso {
+  id           Int      @id @default(autoincrement())
+  nome         String
+  cargaHoraria Int?
+  descricao    String?
+  ativo        Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  conclusoes CursoConclusao[]
+}
+
+model CursoConclusao {
+  id            Int      @id @default(autoincrement())
+  cursoId       Int
+  curso         Curso    @relation(fields: [cursoId], references: [id])
+  membroId      Int
+  membro        Membro   @relation(fields: [membroId], references: [id])
+  dataConclusao DateTime
+  instrutor     String?
+  nota          String?
+  observacoes   String?
+  createdAt     DateTime @default(now())
+}
+
+// tipo: OBREIRO | MEMBRO
+model CartaRecomendacao {
+  id           Int      @id @default(autoincrement())
+  membroId     Int
+  membro       Membro   @relation(fields: [membroId], references: [id])
+  tipo         String
+  destinatario String?
+  finalidade   String?
+  data         DateTime @default(now())
+  observacoes  String?
+  createdAt    DateTime @default(now())
+}
+
+model CartaMudanca {
+  id                    Int          @id @default(autoincrement())
+  membroId              Int
+  membro                Membro       @relation(fields: [membroId], references: [id])
+  congregacaoOrigemId   Int?
+  congregacaoOrigem     Congregacao? @relation("CartaMudancaOrigem", fields: [congregacaoOrigemId], references: [id])
+  congregacaoDestinoId  Int?
+  congregacaoDestino    Congregacao? @relation("CartaMudancaDestino", fields: [congregacaoDestinoId], references: [id])
+  igrejaDestinoTexto    String?
+  data                  DateTime     @default(now())
+  motivo                String?
+  observacoes           String?
+  createdAt             DateTime     @default(now())
+}
+
+// tipo: CARTEIRINHA | CERTIFICADO_BATISMO | CERTIFICADO_APRESENTACAO | CERTIFICADO_CURSO | CARTA_RECOMENDACAO | CARTA_MUDANCA
+// status: EMITIDO | CANCELADO
+// referenciaId aponta para o id do registro de origem (Batismo, ApresentacaoCrianca, CursoConclusao, CartaRecomendacao ou CartaMudanca) conforme o tipo
+model Documento {
+  id            Int      @id @default(autoincrement())
+  tipo          String
+  numero        String   @unique
+  dataEmissao   DateTime @default(now())
+  status        String   @default("EMITIDO")
+  membroId      Int?
+  membro        Membro?  @relation(fields: [membroId], references: [id])
+  referenciaId  Int?
+  validade      DateTime?
+  emitidoPorId  Int
+  emitidoPor    User     @relation(fields: [emitidoPorId], references: [id])
+  observacoes   String?
+  createdAt     DateTime @default(now())
+}
+
+// tipo: CULTO | REUNIAO | CASAMENTO | BATISMO | EVENTO_SOCIAL | OUTRO
+// recorrencia: NENHUMA | SEMANAL | MENSAL
+model EventoAgenda {
+  id            Int          @id @default(autoincrement())
+  titulo        String
+  descricao     String?
+  inicio        DateTime
+  fim           DateTime
+  local         String?
+  tipo          String?
+  congregacaoId Int?
+  congregacao   Congregacao? @relation(fields: [congregacaoId], references: [id])
+  responsavelId Int?
+  responsavel   Membro?      @relation(fields: [responsavelId], references: [id])
+  recorrencia   String?      @default("NENHUMA")
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+// role: ADMIN | SECRETARIA | LIDERANCA | LEITURA
+model User {
+  id            Int          @id @default(autoincrement())
+  nome          String
+  email         String       @unique
+  senhaHash     String
+  role          String       @default("SECRETARIA")
+  ativo         Boolean      @default(true)
+  membroId      Int?         @unique
+  membro        Membro?      @relation(fields: [membroId], references: [id])
+  congregacaoId Int?
+  congregacao   Congregacao? @relation(fields: [congregacaoId], references: [id])
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  documentosEmitidos Documento[]
+}
+
+model Configuracao {
+  id                     Int      @id @default(autoincrement())
+  nomeIgreja             String
+  cnpj                   String?
+  logoUrl                String?
+  enderecoSede           String?
+  telefoneSede           String?
+  nomePresidente         String?
+  cargoPresidente        String?  @default("Pastor Presidente")
+  assinaturaUrl          String?
+  updatedAt              DateTime @updatedAt
+}
