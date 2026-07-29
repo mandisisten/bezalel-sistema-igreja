@@ -1,99 +1,59 @@
-"use server";
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { toTimestamp } from "@/lib/firestore-utils";
 
-import { z } from "zod";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+export type ApresentacaoInput = {
+  nomeCrianca: string;
+  dataNascimento: Timestamp | null;
+  nomePai: string | null;
+  nomeMae: string | null;
+  data: Timestamp;
+  oficiante: string | null;
+  congregacaoId: string | null;
+  congregacaoNome?: string | null;
+  responsavelId: string | null;
+  responsavelNome?: string | null;
+  observacoes: string | null;
+};
 
-const apresentacaoSchema = z.object({
-  nomeCrianca: z.string().min(2, "Informe o nome da criança."),
-  dataNascimento: z.string().optional(),
-  nomePai: z.string().optional(),
-  nomeMae: z.string().optional(),
-  data: z.string().min(1, "Informe a data."),
-  oficiante: z.string().optional(),
-  congregacaoId: z.coerce.number().int().optional(),
-  responsavelId: z.coerce.number().int().optional(),
-  observacoes: z.string().optional(),
-});
+async function parseForm(formData: FormData): Promise<ApresentacaoInput> {
+  const nomeCrianca = String(formData.get("nomeCrianca") ?? "");
+  if (!nomeCrianca || nomeCrianca.length < 2) throw new Error("Informe o nome da criança.");
+  const data = String(formData.get("data") ?? "");
+  if (!data) throw new Error("Informe a data.");
+  const congregacaoId = String(formData.get("congregacaoId") ?? "") || null;
+  const responsavelId = String(formData.get("responsavelId") ?? "") || null;
 
-export type ApresentacaoFormState = { error?: string };
+  const [congregacaoSnap, responsavelSnap] = await Promise.all([
+    congregacaoId ? getDoc(doc(db, "congregacoes", congregacaoId)) : Promise.resolve(null),
+    responsavelId ? getDoc(doc(db, "membros", responsavelId)) : Promise.resolve(null),
+  ]);
 
-function parseForm(formData: FormData) {
-  return apresentacaoSchema.safeParse({
-    nomeCrianca: formData.get("nomeCrianca"),
-    dataNascimento: formData.get("dataNascimento") || undefined,
-    nomePai: formData.get("nomePai") || undefined,
-    nomeMae: formData.get("nomeMae") || undefined,
-    data: formData.get("data"),
-    oficiante: formData.get("oficiante") || undefined,
-    congregacaoId: formData.get("congregacaoId") || undefined,
-    responsavelId: formData.get("responsavelId") || undefined,
-    observacoes: formData.get("observacoes") || undefined,
-  });
+  return {
+    nomeCrianca,
+    dataNascimento: toTimestamp(String(formData.get("dataNascimento") ?? "") || null),
+    nomePai: String(formData.get("nomePai") ?? "") || null,
+    nomeMae: String(formData.get("nomeMae") ?? "") || null,
+    data: toTimestamp(data)!,
+    oficiante: String(formData.get("oficiante") ?? "") || null,
+    congregacaoId,
+    congregacaoNome: congregacaoSnap?.exists() ? (congregacaoSnap.data().nome as string) : null,
+    responsavelId,
+    responsavelNome: responsavelSnap?.exists() ? (responsavelSnap.data().nomeCompleto as string) : null,
+    observacoes: String(formData.get("observacoes") ?? "") || null,
+  };
 }
 
-export async function createApresentacao(
-  _prevState: ApresentacaoFormState,
-  formData: FormData,
-): Promise<ApresentacaoFormState> {
-  await requireRole(["ADMIN", "SECRETARIA"]);
-
-  const parsed = parseForm(formData);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  }
-
-  const { dataNascimento, ...rest } = parsed.data;
-
-  await prisma.apresentacaoCrianca.create({
-    data: {
-      ...rest,
-      data: new Date(parsed.data.data),
-      dataNascimento: dataNascimento ? new Date(dataNascimento) : undefined,
-    },
-  });
-
-  revalidatePath("/apresentacoes");
-  redirect("/apresentacoes");
+export async function createApresentacao(formData: FormData) {
+  const input = await parseForm(formData);
+  await addDoc(collection(db, "apresentacoes"), { ...input, createdAt: serverTimestamp() });
 }
 
-export async function updateApresentacao(
-  id: number,
-  _prevState: ApresentacaoFormState,
-  formData: FormData,
-): Promise<ApresentacaoFormState> {
-  await requireRole(["ADMIN", "SECRETARIA"]);
-
-  const parsed = parseForm(formData);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  }
-
-  const { dataNascimento, ...rest } = parsed.data;
-
-  await prisma.apresentacaoCrianca.update({
-    where: { id },
-    data: {
-      ...rest,
-      data: new Date(parsed.data.data),
-      dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
-    },
-  });
-
-  revalidatePath("/apresentacoes");
-  redirect("/apresentacoes");
+export async function updateApresentacao(id: string, formData: FormData) {
+  const input = await parseForm(formData);
+  await updateDoc(doc(db, "apresentacoes", id), { ...input });
 }
 
-export async function deleteApresentacao(id: number) {
-  await requireRole(["ADMIN"]);
-
-  try {
-    await prisma.apresentacaoCrianca.delete({ where: { id } });
-  } catch {
-    throw new Error("Não é possível excluir: existem documentos vinculados a este registro.");
-  }
-
-  revalidatePath("/apresentacoes");
+export async function deleteApresentacao(id: string) {
+  await deleteDoc(doc(db, "apresentacoes", id));
 }

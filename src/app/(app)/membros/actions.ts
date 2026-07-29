@@ -1,223 +1,223 @@
-"use server";
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  serverTimestamp,
+  Timestamp,
+} from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
+import { toTimestamp } from "@/lib/firestore-utils";
 
-import { z } from "zod";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
-import { saveMemberPhoto, deleteMemberPhoto } from "@/lib/upload";
+export type MembroInput = {
+  nomeCompleto: string;
+  apelido?: string | null;
+  fotoUrl?: string | null;
+  dataNascimento?: Timestamp | null;
+  sexo?: string | null;
+  estadoCivil?: string | null;
+  naturalidade?: string | null;
+  nacionalidade?: string | null;
+  rg?: string | null;
+  cpf?: string | null;
+  cep?: string | null;
+  endereco?: string | null;
+  numeroCasa?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  telefone?: string | null;
+  celular?: string | null;
+  email?: string | null;
+  profissao?: string | null;
+  escolaridade?: string | null;
+  nomeConjuge?: string | null;
+  nomePai?: string | null;
+  nomeMae?: string | null;
+  dataConversao?: Timestamp | null;
+  dataAdmissao?: Timestamp | null;
+  formaAdmissao?: string | null;
+  congregacaoId: string;
+  congregacaoNome?: string | null;
+  cargoId?: string | null;
+  cargoNome?: string | null;
+  status: string;
+  dataSaida?: Timestamp | null;
+  motivoSaida?: string | null;
+  observacoes?: string | null;
+};
 
-const membroSchema = z.object({
-  nomeCompleto: z.string().min(2, "Informe o nome completo."),
-  apelido: z.string().optional(),
-  dataNascimento: z.string().optional(),
-  sexo: z.string().optional(),
-  estadoCivil: z.string().optional(),
-  naturalidade: z.string().optional(),
-  nacionalidade: z.string().optional(),
-  rg: z.string().optional(),
-  cpf: z.string().optional(),
-  cep: z.string().optional(),
-  endereco: z.string().optional(),
-  numeroCasa: z.string().optional(),
-  bairro: z.string().optional(),
-  cidade: z.string().optional(),
-  uf: z.string().optional(),
-  telefone: z.string().optional(),
-  celular: z.string().optional(),
-  email: z.string().email("E-mail inválido.").optional().or(z.literal("")),
-  profissao: z.string().optional(),
-  escolaridade: z.string().optional(),
-  nomeConjuge: z.string().optional(),
-  nomePai: z.string().optional(),
-  nomeMae: z.string().optional(),
-  dataConversao: z.string().optional(),
-  dataAdmissao: z.string().optional(),
-  formaAdmissao: z.string().optional(),
-  congregacaoId: z.coerce.number().int("Selecione a congregação."),
-  cargoId: z.coerce.number().int().optional(),
-  status: z.string(),
-  dataSaida: z.string().optional(),
-  motivoSaida: z.string().optional(),
-  observacoes: z.string().optional(),
-});
-
-export type MembroFormState = { error?: string };
-
-function toDate(value?: string) {
-  return value ? new Date(value) : undefined;
+function str(formData: FormData, key: string): string | null {
+  const value = formData.get(key);
+  return value ? String(value) : null;
 }
 
-function parseForm(formData: FormData) {
-  return membroSchema.safeParse({
-    nomeCompleto: formData.get("nomeCompleto"),
-    apelido: formData.get("apelido") || undefined,
-    dataNascimento: formData.get("dataNascimento") || undefined,
-    sexo: formData.get("sexo") || undefined,
-    estadoCivil: formData.get("estadoCivil") || undefined,
-    naturalidade: formData.get("naturalidade") || undefined,
-    nacionalidade: formData.get("nacionalidade") || undefined,
-    rg: formData.get("rg") || undefined,
-    cpf: formData.get("cpf") || undefined,
-    cep: formData.get("cep") || undefined,
-    endereco: formData.get("endereco") || undefined,
-    numeroCasa: formData.get("numeroCasa") || undefined,
-    bairro: formData.get("bairro") || undefined,
-    cidade: formData.get("cidade") || undefined,
-    uf: formData.get("uf") || undefined,
-    telefone: formData.get("telefone") || undefined,
-    celular: formData.get("celular") || undefined,
-    email: formData.get("email") || undefined,
-    profissao: formData.get("profissao") || undefined,
-    escolaridade: formData.get("escolaridade") || undefined,
-    nomeConjuge: formData.get("nomeConjuge") || undefined,
-    nomePai: formData.get("nomePai") || undefined,
-    nomeMae: formData.get("nomeMae") || undefined,
-    dataConversao: formData.get("dataConversao") || undefined,
-    dataAdmissao: formData.get("dataAdmissao") || undefined,
-    formaAdmissao: formData.get("formaAdmissao") || undefined,
-    congregacaoId: formData.get("congregacaoId"),
-    cargoId: formData.get("cargoId") || undefined,
-    status: formData.get("status") || "ATIVO",
-    dataSaida: formData.get("dataSaida") || undefined,
-    motivoSaida: formData.get("motivoSaida") || undefined,
-    observacoes: formData.get("observacoes") || undefined,
-  });
+async function uploadFoto(file: File): Promise<string> {
+  const ext = file.name.split(".").pop() || "jpg";
+  const path = `membros/${crypto.randomUUID()}.${ext}`;
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, file);
+  return getDownloadURL(storageRef);
 }
 
-export async function createMembro(
-  _prevState: MembroFormState,
-  formData: FormData,
-): Promise<MembroFormState> {
-  await requireRole(["ADMIN", "SECRETARIA"]);
+async function deleteFoto(fotoUrl: string | null | undefined) {
+  if (!fotoUrl) return;
+  try {
+    await deleteObject(ref(storage, fotoUrl));
+  } catch {
+    // arquivo pode já não existir; ignora
+  }
+}
 
-  const parsed = parseForm(formData);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+async function parseForm(formData: FormData): Promise<{ data: MembroInput; cargoId: string | null }> {
+  const nomeCompleto = str(formData, "nomeCompleto");
+  if (!nomeCompleto || nomeCompleto.length < 2) {
+    throw new Error("Informe o nome completo.");
+  }
+  const congregacaoId = str(formData, "congregacaoId");
+  if (!congregacaoId) {
+    throw new Error("Selecione a congregação.");
   }
 
-  const { congregacaoId, cargoId, dataNascimento, dataConversao, dataAdmissao, dataSaida, ...rest } =
-    parsed.data;
+  const congregacaoSnap = await getDoc(doc(db, "congregacoes", congregacaoId));
+  const congregacaoNome = congregacaoSnap.exists() ? (congregacaoSnap.data().nome as string) : null;
+
+  const cargoId = str(formData, "cargoId");
+  let cargoNome: string | null = null;
+  if (cargoId) {
+    const cargoSnap = await getDoc(doc(db, "cargos", cargoId));
+    cargoNome = cargoSnap.exists() ? (cargoSnap.data().nome as string) : null;
+  }
+
+  const data: MembroInput = {
+    nomeCompleto,
+    apelido: str(formData, "apelido"),
+    dataNascimento: toTimestamp(str(formData, "dataNascimento")),
+    sexo: str(formData, "sexo"),
+    estadoCivil: str(formData, "estadoCivil"),
+    naturalidade: str(formData, "naturalidade"),
+    nacionalidade: str(formData, "nacionalidade") ?? "Brasileira",
+    rg: str(formData, "rg"),
+    cpf: str(formData, "cpf"),
+    cep: str(formData, "cep"),
+    endereco: str(formData, "endereco"),
+    numeroCasa: str(formData, "numeroCasa"),
+    bairro: str(formData, "bairro"),
+    cidade: str(formData, "cidade"),
+    uf: str(formData, "uf"),
+    telefone: str(formData, "telefone"),
+    celular: str(formData, "celular"),
+    email: str(formData, "email"),
+    profissao: str(formData, "profissao"),
+    escolaridade: str(formData, "escolaridade"),
+    nomeConjuge: str(formData, "nomeConjuge"),
+    nomePai: str(formData, "nomePai"),
+    nomeMae: str(formData, "nomeMae"),
+    dataConversao: toTimestamp(str(formData, "dataConversao")),
+    dataAdmissao: toTimestamp(str(formData, "dataAdmissao")),
+    formaAdmissao: str(formData, "formaAdmissao"),
+    congregacaoId,
+    congregacaoNome,
+    cargoId,
+    cargoNome,
+    status: str(formData, "status") ?? "ATIVO",
+    dataSaida: toTimestamp(str(formData, "dataSaida")),
+    motivoSaida: str(formData, "motivoSaida"),
+    observacoes: str(formData, "observacoes"),
+  };
+
+  return { data, cargoId };
+}
+
+export async function createMembro(formData: FormData): Promise<string> {
+  const { data, cargoId } = await parseForm(formData);
 
   const foto = formData.get("foto");
-  let fotoUrl: string | undefined;
+  let fotoUrl: string | null = null;
   if (foto instanceof File && foto.size > 0) {
-    fotoUrl = await saveMemberPhoto(foto);
+    fotoUrl = await uploadFoto(foto);
   }
 
-  const membro = await prisma.membro.create({
-    data: {
-      ...rest,
-      fotoUrl,
-      congregacaoId,
-      cargoId: cargoId || undefined,
-      dataNascimento: toDate(dataNascimento),
-      dataConversao: toDate(dataConversao),
-      dataAdmissao: toDate(dataAdmissao),
-      dataSaida: toDate(dataSaida),
-    },
+  const docRef = await addDoc(collection(db, "membros"), {
+    ...data,
+    fotoUrl,
+    createdAt: serverTimestamp(),
   });
 
   if (cargoId) {
-    await prisma.cargoHistorico.create({
-      data: {
-        membroId: membro.id,
-        cargoId,
-        congregacaoId,
-        dataInicio: toDate(dataAdmissao) ?? new Date(),
-      },
+    await addDoc(collection(db, "membros", docRef.id, "cargoHistorico"), {
+      cargoId,
+      cargoNome: data.cargoNome,
+      congregacaoId: data.congregacaoId,
+      congregacaoNome: data.congregacaoNome,
+      dataInicio: data.dataAdmissao ?? Timestamp.now(),
+      dataFim: null,
+      observacao: null,
     });
   }
 
-  revalidatePath("/membros");
-  redirect(`/membros/${membro.id}`);
+  return docRef.id;
 }
 
-export async function updateMembro(
-  id: number,
-  _prevState: MembroFormState,
-  formData: FormData,
-): Promise<MembroFormState> {
-  await requireRole(["ADMIN", "SECRETARIA"]);
+export async function updateMembro(id: string, formData: FormData) {
+  const { data, cargoId } = await parseForm(formData);
 
-  const parsed = parseForm(formData);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  }
-
-  const existing = await prisma.membro.findUnique({ where: { id } });
-  if (!existing) {
-    return { error: "Membro não encontrado." };
-  }
-
-  const { congregacaoId, cargoId, dataNascimento, dataConversao, dataAdmissao, dataSaida, ...rest } =
-    parsed.data;
+  const existingSnap = await getDoc(doc(db, "membros", id));
+  const existing = existingSnap.data() as MembroInput | undefined;
 
   const foto = formData.get("foto");
-  let fotoUrl: string | undefined;
+  let fotoUrl: string | null | undefined;
   if (foto instanceof File && foto.size > 0) {
-    fotoUrl = await saveMemberPhoto(foto);
-    await deleteMemberPhoto(existing.fotoUrl);
+    fotoUrl = await uploadFoto(foto);
+    await deleteFoto(existing?.fotoUrl);
   }
 
-  await prisma.membro.update({
-    where: { id },
-    data: {
-      ...rest,
-      ...(fotoUrl ? { fotoUrl } : {}),
-      congregacaoId,
-      cargoId: cargoId || null,
-      dataNascimento: toDate(dataNascimento) ?? null,
-      dataConversao: toDate(dataConversao) ?? null,
-      dataAdmissao: toDate(dataAdmissao) ?? null,
-      dataSaida: toDate(dataSaida) ?? null,
-    },
+  await updateDoc(doc(db, "membros", id), {
+    ...data,
+    ...(fotoUrl ? { fotoUrl } : {}),
   });
 
-  if (cargoId !== existing.cargoId) {
-    const openHistorico = await prisma.cargoHistorico.findFirst({
-      where: { membroId: id, dataFim: null },
-      orderBy: { dataInicio: "desc" },
-    });
-    if (openHistorico) {
-      await prisma.cargoHistorico.update({
-        where: { id: openHistorico.id },
-        data: { dataFim: new Date() },
-      });
+  if (existing && cargoId !== (existing.cargoId ?? null)) {
+    const historicoSnap = await getDocs(collection(db, "membros", id, "cargoHistorico"));
+    const abertos = historicoSnap.docs
+      .filter((d) => d.data().dataFim === null)
+      .sort(
+        (a, b) =>
+          (b.data().dataInicio as Timestamp).toMillis() -
+          (a.data().dataInicio as Timestamp).toMillis(),
+      );
+    for (const historicoDoc of abertos) {
+      await updateDoc(historicoDoc.ref, { dataFim: Timestamp.now() });
     }
+
     if (cargoId) {
-      await prisma.cargoHistorico.create({
-        data: {
-          membroId: id,
-          cargoId,
-          congregacaoId,
-          dataInicio: new Date(),
-        },
+      await addDoc(collection(db, "membros", id, "cargoHistorico"), {
+        cargoId,
+        cargoNome: data.cargoNome,
+        congregacaoId: data.congregacaoId,
+        congregacaoNome: data.congregacaoNome,
+        dataInicio: Timestamp.now(),
+        dataFim: null,
+        observacao: null,
       });
     }
   }
-
-  revalidatePath("/membros");
-  revalidatePath(`/membros/${id}`);
-  redirect(`/membros/${id}`);
 }
 
-export async function deleteMembro(id: number) {
-  await requireRole(["ADMIN"]);
+export async function deleteMembro(id: string) {
+  const membroSnap = await getDoc(doc(db, "membros", id));
+  const membro = membroSnap.data() as MembroInput | undefined;
 
-  const membro = await prisma.membro.findUnique({ where: { id } });
+  const historico = await getDocs(collection(db, "membros", id, "cargoHistorico"));
+  await Promise.all(historico.docs.map((d) => deleteDoc(d.ref)));
 
-  try {
-    await prisma.membro.delete({ where: { id } });
-  } catch {
-    throw new Error(
-      "Não é possível excluir este membro: existem registros vinculados (histórico, documentos, etc.). Considere alterar o status para Inativo.",
-    );
-  }
+  await deleteDoc(doc(db, "membros", id));
 
   if (membro?.fotoUrl) {
-    await deleteMemberPhoto(membro.fotoUrl);
+    await deleteFoto(membro.fotoUrl);
   }
-
-  revalidatePath("/membros");
 }

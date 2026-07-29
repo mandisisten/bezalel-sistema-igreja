@@ -1,14 +1,17 @@
+"use client";
+
 import Link from "next/link";
 import { Users } from "lucide-react";
-import { requireRole } from "@/lib/auth";
-import { getConfiguracao } from "@/lib/documento";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useConfiguracao } from "@/lib/firestore-hooks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfiguracaoForm } from "./configuracao-form";
 
-export default async function ConfiguracoesPage() {
-  await requireRole(["ADMIN"]);
-  const configuracao = await getConfiguracao();
+function ConfiguracoesContent() {
+  const { configuracao, loading } = useConfiguracao();
+
+  if (loading) return <p className="text-muted-foreground">Carregando...</p>;
 
   return (
     <div className="flex flex-col gap-4">
@@ -44,5 +47,13 @@ export default async function ConfiguracoesPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function ConfiguracoesPage() {
+  return (
+    <AuthGuard roles={["ADMIN"]}>
+      <ConfiguracoesContent />
+    </AuthGuard>
   );
 }

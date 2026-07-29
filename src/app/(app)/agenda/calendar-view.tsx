@@ -34,7 +34,7 @@ const MESSAGES = {
 };
 
 type EventoCalendario = {
-  id: number;
+  id: string;
   titulo: string;
   tipo: string | null;
   inicio: Date;
@@ -63,8 +63,8 @@ export function CalendarView({ eventos }: { eventos: EventoCalendario[] }) {
   );
 
   const handleSelectEvent = useCallback(
-    (event: { id: number }) => {
-      router.push(`/agenda/${event.id}`);
+    (event: { id: string }) => {
+      router.push(`/agenda/editar?id=${event.id}`);
     },
     [router],
   );

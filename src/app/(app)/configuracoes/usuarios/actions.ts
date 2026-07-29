@@ -1,99 +1,82 @@
-"use server";
+import { createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from "firebase/auth";
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { db, secondaryAuth, auth } from "@/lib/firebase";
+import { ROLES, type Role } from "@/lib/roles";
 
-import { z } from "zod";
-import bcrypt from "bcryptjs";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
-import { ROLES } from "@/lib/roles";
+export type UsuarioInput = {
+  nome: string;
+  email: string;
+  role: Role;
+  congregacaoId: string | null;
+  congregacaoNome?: string | null;
+  ativo: boolean;
+};
 
-const createSchema = z.object({
-  nome: z.string().min(2, "Informe o nome."),
-  email: z.string().email("E-mail inválido."),
-  senha: z.string().min(6, "A senha deve ter ao menos 6 caracteres."),
-  role: z.enum(ROLES),
-  congregacaoId: z.coerce.number().int().optional(),
-});
-
-const updateSchema = z.object({
-  nome: z.string().min(2, "Informe o nome."),
-  role: z.enum(ROLES),
-  congregacaoId: z.coerce.number().int().optional(),
-  ativo: z.boolean(),
-  senha: z.string().min(6).optional().or(z.literal("")),
-});
-
-export type UserFormState = { error?: string };
-
-export async function createUser(
-  _prevState: UserFormState,
-  formData: FormData,
-): Promise<UserFormState> {
-  await requireRole(["ADMIN"]);
-
-  const parsed = createSchema.safeParse({
-    nome: formData.get("nome"),
-    email: formData.get("email"),
-    senha: formData.get("senha"),
-    role: formData.get("role"),
-    congregacaoId: formData.get("congregacaoId") || undefined,
-  });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  }
-
-  const existing = await prisma.user.findUnique({ where: { email: parsed.data.email } });
-  if (existing) {
-    return { error: "Já existe um usuário com este e-mail." };
-  }
-
-  const senhaHash = await bcrypt.hash(parsed.data.senha, 10);
-
-  await prisma.user.create({
-    data: {
-      nome: parsed.data.nome,
-      email: parsed.data.email,
-      senhaHash,
-      role: parsed.data.role,
-      congregacaoId: parsed.data.congregacaoId,
-    },
-  });
-
-  revalidatePath("/configuracoes/usuarios");
-  redirect("/configuracoes/usuarios");
+function parseRole(formData: FormData): Role {
+  const role = String(formData.get("role") ?? "");
+  if (!ROLES.includes(role as Role)) throw new Error("Papel inválido.");
+  return role as Role;
 }
 
-export async function updateUser(
-  id: number,
-  _prevState: UserFormState,
-  formData: FormData,
-): Promise<UserFormState> {
-  await requireRole(["ADMIN"]);
+export async function createUsuario(formData: FormData): Promise<string> {
+  const nome = String(formData.get("nome") ?? "");
+  if (!nome || nome.length < 2) throw new Error("Informe o nome.");
+  const email = String(formData.get("email") ?? "");
+  if (!email) throw new Error("Informe o e-mail.");
+  const senha = String(formData.get("senha") ?? "");
+  if (!senha || senha.length < 6) throw new Error("A senha deve ter ao menos 6 caracteres.");
+  const role = parseRole(formData);
+  const congregacaoId = String(formData.get("congregacaoId") ?? "") || null;
 
-  const parsed = updateSchema.safeParse({
-    nome: formData.get("nome"),
-    role: formData.get("role"),
-    congregacaoId: formData.get("congregacaoId") || undefined,
-    ativo: formData.get("ativo") === "on",
-    senha: formData.get("senha") || "",
+  const congregacaoSnap = congregacaoId ? await getDoc(doc(db, "congregacoes", congregacaoId)) : null;
+
+  // Cria a conta num app Firebase secundário para não deslogar o admin atual
+  // (createUserWithEmailAndPassword autentica automaticamente no app usado).
+  let uid: string;
+  try {
+    const credential = await createUserWithEmailAndPassword(secondaryAuth, email, senha);
+    uid = credential.user.uid;
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === "auth/email-already-in-use") {
+      throw new Error("Já existe um usuário com este e-mail.");
+    }
+    throw err;
+  } finally {
+    await signOut(secondaryAuth);
+  }
+
+  await setDoc(doc(db, "usuarios", uid), {
+    nome,
+    email,
+    role,
+    congregacaoId,
+    congregacaoNome: congregacaoSnap?.exists() ? (congregacaoSnap.data().nome as string) : null,
+    ativo: true,
+    createdAt: serverTimestamp(),
   });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  }
 
-  const data: Record<string, unknown> = {
-    nome: parsed.data.nome,
-    role: parsed.data.role,
-    congregacaoId: parsed.data.congregacaoId,
-    ativo: parsed.data.ativo,
-  };
-  if (parsed.data.senha) {
-    data.senhaHash = await bcrypt.hash(parsed.data.senha, 10);
-  }
+  return uid;
+}
 
-  await prisma.user.update({ where: { id }, data });
+export async function updateUsuario(uid: string, formData: FormData) {
+  const nome = String(formData.get("nome") ?? "");
+  if (!nome || nome.length < 2) throw new Error("Informe o nome.");
+  const role = parseRole(formData);
+  const congregacaoId = String(formData.get("congregacaoId") ?? "") || null;
+  const ativo = formData.get("ativo") === "on";
 
-  revalidatePath("/configuracoes/usuarios");
-  redirect("/configuracoes/usuarios");
+  const congregacaoSnap = congregacaoId ? await getDoc(doc(db, "congregacoes", congregacaoId)) : null;
+
+  await updateDoc(doc(db, "usuarios", uid), {
+    nome,
+    role,
+    congregacaoId,
+    congregacaoNome: congregacaoSnap?.exists() ? (congregacaoSnap.data().nome as string) : null,
+    ativo,
+  });
+}
+
+export async function enviarRedefinicaoSenha(email: string) {
+  await sendPasswordResetEmail(auth, email);
 }

@@ -1,16 +1,17 @@
-import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+"use client";
+
+import { orderBy } from "firebase/firestore";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useCollectionData } from "@/lib/firestore-hooks";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CartaRecomendacaoForm } from "../carta-form";
 import { createCartaRecomendacao } from "../actions";
+import type { MembroInput } from "../../../membros/actions";
 
-export default async function NovaCartaRecomendacaoPage() {
-  await requireRole(["ADMIN", "SECRETARIA", "LIDERANCA"]);
-
-  const membros = await prisma.membro.findMany({
-    orderBy: { nomeCompleto: "asc" },
-    select: { id: true, nomeCompleto: true },
-  });
+function NovaCartaRecomendacaoContent() {
+  const { data: membros } = useCollectionData<MembroInput>("membros", [
+    orderBy("nomeCompleto", "asc"),
+  ]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -24,5 +25,13 @@ export default async function NovaCartaRecomendacaoPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function NovaCartaRecomendacaoPage() {
+  return (
+    <AuthGuard roles={["ADMIN", "SECRETARIA", "LIDERANCA"]}>
+      <NovaCartaRecomendacaoContent />
+    </AuthGuard>
   );
 }

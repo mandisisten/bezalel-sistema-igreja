@@ -1,11 +1,13 @@
+"use client";
+
 import Image from "next/image";
 import { Church } from "lucide-react";
-import { getConfiguracao } from "@/lib/documento";
+import { useConfiguracao } from "@/lib/firestore-hooks";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoginForm } from "./login-form";
 
-export default async function LoginPage() {
-  const configuracao = await getConfiguracao();
+export default function LoginPage() {
+  const { configuracao } = useConfiguracao();
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-4">
@@ -26,6 +28,7 @@ export default async function LoginPage() {
               width={56}
               height={56}
               className="mb-2 size-14 rounded-xl object-contain"
+              unoptimized
             />
           ) : (
             <span className="mb-2 flex size-14 items-center justify-center rounded-xl bg-primary text-primary-foreground">

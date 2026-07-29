@@ -1,81 +1,53 @@
-"use server";
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { toTimestamp } from "@/lib/firestore-utils";
 
-import { z } from "zod";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+export type ConclusaoInput = {
+  cursoId: string;
+  cursoNome?: string | null;
+  membroId: string;
+  membroNome?: string | null;
+  dataConclusao: Timestamp;
+  instrutor: string | null;
+  nota: string | null;
+  observacoes: string | null;
+};
 
-const conclusaoSchema = z.object({
-  cursoId: z.coerce.number().int("Selecione o curso."),
-  membroId: z.coerce.number().int("Selecione o membro."),
-  dataConclusao: z.string().min(1, "Informe a data de conclusão."),
-  instrutor: z.string().optional(),
-  nota: z.string().optional(),
-  observacoes: z.string().optional(),
-});
+async function parseForm(formData: FormData): Promise<ConclusaoInput> {
+  const cursoId = String(formData.get("cursoId") ?? "");
+  if (!cursoId) throw new Error("Selecione o curso.");
+  const membroId = String(formData.get("membroId") ?? "");
+  if (!membroId) throw new Error("Selecione o membro.");
+  const dataConclusao = String(formData.get("dataConclusao") ?? "");
+  if (!dataConclusao) throw new Error("Informe a data de conclusão.");
 
-export type ConclusaoFormState = { error?: string };
+  const [cursoSnap, membroSnap] = await Promise.all([
+    getDoc(doc(db, "cursos", cursoId)),
+    getDoc(doc(db, "membros", membroId)),
+  ]);
 
-function parseForm(formData: FormData) {
-  return conclusaoSchema.safeParse({
-    cursoId: formData.get("cursoId"),
-    membroId: formData.get("membroId"),
-    dataConclusao: formData.get("dataConclusao"),
-    instrutor: formData.get("instrutor") || undefined,
-    nota: formData.get("nota") || undefined,
-    observacoes: formData.get("observacoes") || undefined,
-  });
+  return {
+    cursoId,
+    cursoNome: cursoSnap.exists() ? (cursoSnap.data().nome as string) : null,
+    membroId,
+    membroNome: membroSnap.exists() ? (membroSnap.data().nomeCompleto as string) : null,
+    dataConclusao: toTimestamp(dataConclusao)!,
+    instrutor: String(formData.get("instrutor") ?? "") || null,
+    nota: String(formData.get("nota") ?? "") || null,
+    observacoes: String(formData.get("observacoes") ?? "") || null,
+  };
 }
 
-export async function createConclusao(
-  _prevState: ConclusaoFormState,
-  formData: FormData,
-): Promise<ConclusaoFormState> {
-  await requireRole(["ADMIN", "SECRETARIA"]);
-
-  const parsed = parseForm(formData);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  }
-
-  await prisma.cursoConclusao.create({
-    data: { ...parsed.data, dataConclusao: new Date(parsed.data.dataConclusao) },
-  });
-
-  revalidatePath("/cursos/conclusoes");
-  redirect("/cursos/conclusoes");
+export async function createConclusao(formData: FormData) {
+  const input = await parseForm(formData);
+  await addDoc(collection(db, "cursoConclusoes"), { ...input, createdAt: serverTimestamp() });
 }
 
-export async function updateConclusao(
-  id: number,
-  _prevState: ConclusaoFormState,
-  formData: FormData,
-): Promise<ConclusaoFormState> {
-  await requireRole(["ADMIN", "SECRETARIA"]);
-
-  const parsed = parseForm(formData);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  }
-
-  await prisma.cursoConclusao.update({
-    where: { id },
-    data: { ...parsed.data, dataConclusao: new Date(parsed.data.dataConclusao) },
-  });
-
-  revalidatePath("/cursos/conclusoes");
-  redirect("/cursos/conclusoes");
+export async function updateConclusao(id: string, formData: FormData) {
+  const input = await parseForm(formData);
+  await updateDoc(doc(db, "cursoConclusoes", id), { ...input });
 }
 
-export async function deleteConclusao(id: number) {
-  await requireRole(["ADMIN"]);
-
-  try {
-    await prisma.cursoConclusao.delete({ where: { id } });
-  } catch {
-    throw new Error("Não é possível excluir: existem documentos vinculados a este registro.");
-  }
-
-  revalidatePath("/cursos/conclusoes");
+export async function deleteConclusao(id: string) {
+  await deleteDoc(doc(db, "cursoConclusoes", id));
 }

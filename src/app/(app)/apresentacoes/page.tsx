@@ -1,8 +1,15 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
-import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
-import { formatDate } from "@/lib/format";
+import { Plus, FileDown } from "lucide-react";
+import { orderBy } from "firebase/firestore";
+import { toast } from "sonner";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useAuth } from "@/lib/firebase-auth";
+import { useCollectionData, useConfiguracao, type WithId } from "@/lib/firestore-hooks";
+import { formatTimestamp } from "@/lib/firestore-utils";
+import { gerarCertificadoApresentacao } from "@/lib/pdf-client";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -13,15 +20,28 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DeleteButton } from "@/components/shared/delete-button";
-import { deleteApresentacao } from "./actions";
+import { deleteApresentacao, type ApresentacaoInput } from "./actions";
 
-export default async function ApresentacoesPage() {
-  await requireUser();
+function ApresentacoesContent() {
+  const { profile, user } = useAuth();
+  const canManage = profile?.role === "ADMIN" || profile?.role === "SECRETARIA";
+  const { configuracao } = useConfiguracao();
+  const { data: apresentacoes, loading } = useCollectionData<ApresentacaoInput>("apresentacoes", [
+    orderBy("data", "desc"),
+  ]);
+  const [gerandoId, setGerandoId] = useState<string | null>(null);
 
-  const apresentacoes = await prisma.apresentacaoCrianca.findMany({
-    orderBy: { data: "desc" },
-    include: { congregacao: true, responsavel: true },
-  });
+  async function handleCertificado(apresentacao: WithId<ApresentacaoInput>) {
+    if (!user || !profile) return;
+    setGerandoId(apresentacao.id);
+    try {
+      await gerarCertificadoApresentacao(apresentacao, configuracao, { uid: user.uid, nome: profile.nome });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar PDF.");
+    } finally {
+      setGerandoId(null);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -30,10 +50,12 @@ export default async function ApresentacoesPage() {
           <h1 className="text-2xl font-semibold">Apresentação de Crianças</h1>
           <p className="text-muted-foreground">{apresentacoes.length} registro(s).</p>
         </div>
-        <Button nativeButton={false} render={<Link href="/apresentacoes/novo" />}>
-          <Plus className="size-4" />
-          Nova apresentação
-        </Button>
+        {canManage && (
+          <Button nativeButton={false} render={<Link href="/apresentacoes/novo" />}>
+            <Plus className="size-4" />
+            Nova apresentação
+          </Button>
+        )}
       </div>
 
       <div className="overflow-x-auto rounded-lg border">
@@ -44,51 +66,49 @@ export default async function ApresentacoesPage() {
               <TableHead>Data</TableHead>
               <TableHead>Responsável</TableHead>
               <TableHead>Congregação</TableHead>
-              <TableHead className="w-24 text-right">Ações</TableHead>
+              <TableHead className="w-40 text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {apresentacoes.map((a) => (
               <TableRow key={a.id}>
-                <TableCell className="font-medium">
-                  <Link href={`/apresentacoes/${a.id}`}>{a.nomeCrianca}</Link>
-                </TableCell>
-                <TableCell>{formatDate(a.data)}</TableCell>
-                <TableCell>{a.responsavel?.nomeCompleto ?? "—"}</TableCell>
-                <TableCell>{a.congregacao?.nome ?? "—"}</TableCell>
+                <TableCell className="font-medium">{a.nomeCrianca}</TableCell>
+                <TableCell>{formatTimestamp(a.data)}</TableCell>
+                <TableCell>{a.responsavelNome ?? "—"}</TableCell>
+                <TableCell>{a.congregacaoNome ?? "—"}</TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
-                      nativeButton={false}
-                      render={
-                        <Link
-                          href={`/api/documentos/certificado-apresentacao/${a.id}`}
-                          target="_blank"
-                        />
-                      }
+                      disabled={gerandoId === a.id}
+                      onClick={() => handleCertificado(a)}
                     >
-                      Certificado
+                      <FileDown className="size-4" />
+                      {gerandoId === a.id ? "Gerando..." : "Certificado"}
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      nativeButton={false}
-                      render={<Link href={`/apresentacoes/${a.id}`} />}
-                    >
-                      Editar
-                    </Button>
-                    <DeleteButton
-                      action={deleteApresentacao.bind(null, a.id)}
-                      title="Excluir registro de apresentação?"
-                      description="Esta ação não pode ser desfeita."
-                    />
+                    {canManage && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        nativeButton={false}
+                        render={<Link href={`/apresentacoes/editar?id=${a.id}`} />}
+                      >
+                        Editar
+                      </Button>
+                    )}
+                    {profile?.role === "ADMIN" && (
+                      <DeleteButton
+                        action={() => deleteApresentacao(a.id)}
+                        title="Excluir registro de apresentação?"
+                        description="Esta ação não pode ser desfeita."
+                      />
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
             ))}
-            {apresentacoes.length === 0 && (
+            {!loading && apresentacoes.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
                   Nenhuma apresentação registrada.
@@ -99,5 +119,13 @@ export default async function ApresentacoesPage() {
         </Table>
       </div>
     </div>
+  );
+}
+
+export default function ApresentacoesPage() {
+  return (
+    <AuthGuard>
+      <ApresentacoesContent />
+    </AuthGuard>
   );
 }

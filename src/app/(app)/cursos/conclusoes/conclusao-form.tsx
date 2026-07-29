@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,12 +14,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldGroup, FieldLabel, FieldError, FieldSet } from "@/components/ui/field";
-import type { ConclusaoFormState } from "./actions";
 
-type Action = (state: ConclusaoFormState, formData: FormData) => Promise<ConclusaoFormState>;
-
-type Membro = { id: number; nomeCompleto: string };
-type Curso = { id: number; nome: string };
+type Membro = { id: string; nomeCompleto: string };
+type Curso = { id: string; nome: string };
 
 export function ConclusaoForm({
   action,
@@ -25,27 +24,40 @@ export function ConclusaoForm({
   cursos,
   defaultValues,
 }: {
-  action: Action;
+  action: (formData: FormData) => Promise<unknown>;
   membros: Membro[];
   cursos: Curso[];
   defaultValues?: {
-    cursoId: number;
-    membroId: number;
+    cursoId: string;
+    membroId: string;
     dataConclusao: string;
     instrutor: string | null;
     nota: string | null;
     observacoes: string | null;
   };
 }) {
-  const [state, formAction, isPending] = useActionState<ConclusaoFormState, FormData>(
-    action,
-    {},
-  );
-  const membroItems = Object.fromEntries(membros.map((m) => [String(m.id), m.nomeCompleto]));
-  const cursoItems = Object.fromEntries(cursos.map((c) => [String(c.id), c.nome]));
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
+  const membroItems = Object.fromEntries(membros.map((m) => [m.id, m.nomeCompleto]));
+  const cursoItems = Object.fromEntries(cursos.map((c) => [c.id, c.nome]));
+
+  async function handleSubmit(formData: FormData) {
+    setError(null);
+    setIsPending(true);
+    try {
+      await action(formData);
+      toast.success("Conclusão salva.");
+      router.push("/cursos/conclusoes");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao salvar.");
+    } finally {
+      setIsPending(false);
+    }
+  }
 
   return (
-    <form action={formAction}>
+    <form action={handleSubmit}>
       <FieldSet>
         <FieldGroup>
           <Field orientation="responsive">
@@ -54,7 +66,7 @@ export function ConclusaoForm({
               <Select
                 name="cursoId"
                 items={cursoItems}
-                defaultValue={defaultValues?.cursoId ? String(defaultValues.cursoId) : undefined}
+                defaultValue={defaultValues?.cursoId}
                 required
               >
                 <SelectTrigger id="cursoId" className="w-full">
@@ -62,7 +74,7 @@ export function ConclusaoForm({
                 </SelectTrigger>
                 <SelectContent>
                   {cursos.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
+                    <SelectItem key={c.id} value={c.id}>
                       {c.nome}
                     </SelectItem>
                   ))}
@@ -74,7 +86,7 @@ export function ConclusaoForm({
               <Select
                 name="membroId"
                 items={membroItems}
-                defaultValue={defaultValues?.membroId ? String(defaultValues.membroId) : undefined}
+                defaultValue={defaultValues?.membroId}
                 required
               >
                 <SelectTrigger id="membroId" className="w-full">
@@ -82,7 +94,7 @@ export function ConclusaoForm({
                 </SelectTrigger>
                 <SelectContent>
                   {membros.map((m) => (
-                    <SelectItem key={m.id} value={String(m.id)}>
+                    <SelectItem key={m.id} value={m.id}>
                       {m.nomeCompleto}
                     </SelectItem>
                   ))}
@@ -122,7 +134,7 @@ export function ConclusaoForm({
             />
           </Field>
 
-          {state.error && <FieldError>{state.error}</FieldError>}
+          {error && <FieldError>{error}</FieldError>}
 
           <Button type="submit" disabled={isPending}>
             {isPending ? "Salvando..." : "Salvar"}

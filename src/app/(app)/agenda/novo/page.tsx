@@ -1,15 +1,20 @@
-import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+"use client";
+
+import { orderBy } from "firebase/firestore";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useCollectionData } from "@/lib/firestore-hooks";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EventoForm } from "../evento-form";
 import { createEvento } from "../actions";
+import type { CongregacaoInput } from "../../congregacoes/actions";
+import type { MembroInput } from "../../membros/actions";
 
-export default async function NovoEventoPage() {
-  await requireRole(["ADMIN", "SECRETARIA", "LIDERANCA"]);
-
-  const [membros, congregacoes] = await Promise.all([
-    prisma.membro.findMany({ orderBy: { nomeCompleto: "asc" }, select: { id: true, nomeCompleto: true } }),
-    prisma.congregacao.findMany({ orderBy: { nome: "asc" } }),
+function NovoEventoContent() {
+  const { data: membros } = useCollectionData<MembroInput>("membros", [
+    orderBy("nomeCompleto", "asc"),
+  ]);
+  const { data: congregacoes } = useCollectionData<CongregacaoInput>("congregacoes", [
+    orderBy("nome", "asc"),
   ]);
 
   return (
@@ -24,5 +29,13 @@ export default async function NovoEventoPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function NovoEventoPage() {
+  return (
+    <AuthGuard roles={["ADMIN", "SECRETARIA", "LIDERANCA"]}>
+      <NovoEventoContent />
+    </AuthGuard>
   );
 }

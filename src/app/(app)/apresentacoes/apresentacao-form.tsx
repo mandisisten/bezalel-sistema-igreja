@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,15 +14,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldGroup, FieldLabel, FieldError, FieldSet } from "@/components/ui/field";
-import type { ApresentacaoFormState } from "./actions";
 
-type Action = (
-  state: ApresentacaoFormState,
-  formData: FormData,
-) => Promise<ApresentacaoFormState>;
-
-type Membro = { id: number; nomeCompleto: string };
-type Congregacao = { id: number; nome: string };
+type Membro = { id: string; nomeCompleto: string };
+type Congregacao = { id: string; nome: string };
 
 export function ApresentacaoForm({
   action,
@@ -28,7 +24,7 @@ export function ApresentacaoForm({
   congregacoes,
   defaultValues,
 }: {
-  action: Action;
+  action: (formData: FormData) => Promise<unknown>;
   membros: Membro[];
   congregacoes: Congregacao[];
   defaultValues?: {
@@ -38,31 +34,39 @@ export function ApresentacaoForm({
     nomeMae: string | null;
     data: string;
     oficiante: string | null;
-    congregacaoId: number | null;
-    responsavelId: number | null;
+    congregacaoId: string | null;
+    responsavelId: string | null;
     observacoes: string | null;
   };
 }) {
-  const [state, formAction, isPending] = useActionState<ApresentacaoFormState, FormData>(
-    action,
-    {},
-  );
-  const membroItems = Object.fromEntries(membros.map((m) => [String(m.id), m.nomeCompleto]));
-  const congregacaoItems = Object.fromEntries(congregacoes.map((c) => [String(c.id), c.nome]));
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
+  const membroItems = Object.fromEntries(membros.map((m) => [m.id, m.nomeCompleto]));
+  const congregacaoItems = Object.fromEntries(congregacoes.map((c) => [c.id, c.nome]));
+
+  async function handleSubmit(formData: FormData) {
+    setError(null);
+    setIsPending(true);
+    try {
+      await action(formData);
+      toast.success("Apresentação salva.");
+      router.push("/apresentacoes");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao salvar.");
+    } finally {
+      setIsPending(false);
+    }
+  }
 
   return (
-    <form action={formAction}>
+    <form action={handleSubmit}>
       <FieldSet>
         <FieldGroup>
           <Field orientation="responsive">
             <Field>
               <FieldLabel htmlFor="nomeCrianca">Nome da criança</FieldLabel>
-              <Input
-                id="nomeCrianca"
-                name="nomeCrianca"
-                defaultValue={defaultValues?.nomeCrianca}
-                required
-              />
+              <Input id="nomeCrianca" name="nomeCrianca" defaultValue={defaultValues?.nomeCrianca} required />
             </Field>
             <Field>
               <FieldLabel htmlFor="dataNascimento">Data de nascimento</FieldLabel>
@@ -103,16 +107,14 @@ export function ApresentacaoForm({
               <Select
                 name="congregacaoId"
                 items={congregacaoItems}
-                defaultValue={
-                  defaultValues?.congregacaoId ? String(defaultValues.congregacaoId) : undefined
-                }
+                defaultValue={defaultValues?.congregacaoId ?? undefined}
               >
                 <SelectTrigger id="congregacaoId" className="w-full">
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
                   {congregacoes.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
+                    <SelectItem key={c.id} value={c.id}>
                       {c.nome}
                     </SelectItem>
                   ))}
@@ -124,16 +126,14 @@ export function ApresentacaoForm({
               <Select
                 name="responsavelId"
                 items={membroItems}
-                defaultValue={
-                  defaultValues?.responsavelId ? String(defaultValues.responsavelId) : undefined
-                }
+                defaultValue={defaultValues?.responsavelId ?? undefined}
               >
                 <SelectTrigger id="responsavelId" className="w-full">
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
                   {membros.map((m) => (
-                    <SelectItem key={m.id} value={String(m.id)}>
+                    <SelectItem key={m.id} value={m.id}>
                       {m.nomeCompleto}
                     </SelectItem>
                   ))}
@@ -152,7 +152,7 @@ export function ApresentacaoForm({
             />
           </Field>
 
-          {state.error && <FieldError>{state.error}</FieldError>}
+          {error && <FieldError>{error}</FieldError>}
 
           <Button type="submit" disabled={isPending}>
             {isPending ? "Salvando..." : "Salvar"}

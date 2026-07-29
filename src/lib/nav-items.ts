@@ -10,7 +10,7 @@ import {
   FileText,
   Mail,
   Send,
-  CalendarDays,
+  Calendar,
   BarChart3,
   Settings,
   type LucideIcon,
@@ -33,7 +33,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Geral",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/agenda", label: "Agenda", icon: CalendarDays },
+      { href: "/agenda", label: "Agenda", icon: Calendar },
       { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
     ],
   },
@@ -49,9 +49,19 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: "Documentos",
     items: [
-      { href: "/cartas/recomendacao", label: "Cartas de Recomendação", icon: Mail },
-      { href: "/cartas/mudanca", label: "Cartas de Mudança", icon: Send },
       { href: "/documentos", label: "Documentos emitidos", icon: FileText },
+      {
+        href: "/cartas/recomendacao",
+        label: "Cartas de recomendação",
+        icon: Mail,
+        roles: ["ADMIN", "SECRETARIA", "LIDERANCA"],
+      },
+      {
+        href: "/cartas/mudanca",
+        label: "Cartas de mudança",
+        icon: Send,
+        roles: ["ADMIN", "SECRETARIA", "LIDERANCA"],
+      },
     ],
   },
   {

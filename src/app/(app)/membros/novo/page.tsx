@@ -1,16 +1,20 @@
-import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+"use client";
+
+import { orderBy } from "firebase/firestore";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useCollectionData } from "@/lib/firestore-hooks";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MembroForm } from "../membro-form";
 import { createMembro } from "../actions";
+import type { CongregacaoInput } from "../../congregacoes/actions";
+import type { CargoInput } from "../../cargos/actions";
 
-export default async function NovoMembroPage() {
-  await requireRole(["ADMIN", "SECRETARIA"]);
-
-  const [congregacoes, cargos] = await Promise.all([
-    prisma.congregacao.findMany({ orderBy: { nome: "asc" } }),
-    prisma.cargo.findMany({ where: { ativo: true }, orderBy: { ordem: "asc" } }),
+function NovoMembroContent() {
+  const { data: congregacoes } = useCollectionData<CongregacaoInput>("congregacoes", [
+    orderBy("nome", "asc"),
   ]);
+  const { data: todosCargos } = useCollectionData<CargoInput>("cargos", [orderBy("ordem", "asc")]);
+  const cargos = todosCargos.filter((c) => c.ativo);
 
   return (
     <div className="flex flex-col gap-4">
@@ -24,5 +28,13 @@ export default async function NovoMembroPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function NovoMembroPage() {
+  return (
+    <AuthGuard roles={["ADMIN", "SECRETARIA"]}>
+      <NovoMembroContent />
+    </AuthGuard>
   );
 }

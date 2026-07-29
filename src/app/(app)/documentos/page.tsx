@@ -1,7 +1,10 @@
-import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
-import { formatDate } from "@/lib/format";
-import { DOCUMENTO_LABELS } from "@/lib/documento";
+"use client";
+
+import { orderBy, limit } from "firebase/firestore";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useCollectionData } from "@/lib/firestore-hooks";
+import { formatTimestamp } from "@/lib/firestore-utils";
+import { DOCUMENTO_LABELS, type DocumentoInput } from "@/lib/documento-client";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -12,14 +15,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export default async function DocumentosPage() {
-  await requireUser();
-
-  const documentos = await prisma.documento.findMany({
-    orderBy: { dataEmissao: "desc" },
-    include: { membro: true, emitidoPor: true },
-    take: 300,
-  });
+function DocumentosContent() {
+  const { data: documentos, loading } = useCollectionData<DocumentoInput>("documentos", [
+    orderBy("dataEmissao", "desc"),
+    limit(300),
+  ]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -48,12 +48,12 @@ export default async function DocumentosPage() {
                 <TableCell>
                   <Badge variant="secondary">{DOCUMENTO_LABELS[d.tipo] ?? d.tipo}</Badge>
                 </TableCell>
-                <TableCell>{d.membro?.nomeCompleto ?? "—"}</TableCell>
-                <TableCell>{formatDate(d.dataEmissao)}</TableCell>
-                <TableCell>{d.emitidoPor.nome}</TableCell>
+                <TableCell>{d.membroNome ?? "—"}</TableCell>
+                <TableCell>{formatTimestamp(d.dataEmissao)}</TableCell>
+                <TableCell>{d.emitidoPorNome}</TableCell>
               </TableRow>
             ))}
-            {documentos.length === 0 && (
+            {!loading && documentos.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
                   Nenhum documento emitido ainda.
@@ -64,5 +64,13 @@ export default async function DocumentosPage() {
         </Table>
       </div>
     </div>
+  );
+}
+
+export default function DocumentosPage() {
+  return (
+    <AuthGuard>
+      <DocumentosContent />
+    </AuthGuard>
   );
 }

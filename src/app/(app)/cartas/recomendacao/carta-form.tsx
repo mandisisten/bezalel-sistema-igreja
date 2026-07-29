@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,14 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldGroup, FieldLabel, FieldError, FieldSet } from "@/components/ui/field";
-import type { CartaRecomendacaoFormState } from "./actions";
 
-type Action = (
-  state: CartaRecomendacaoFormState,
-  formData: FormData,
-) => Promise<CartaRecomendacaoFormState>;
-
-type Membro = { id: number; nomeCompleto: string };
+type Membro = { id: string; nomeCompleto: string };
 
 const TIPO_ITEMS = { OBREIRO: "Obreiro", MEMBRO: "Membro" };
 
@@ -27,17 +23,30 @@ export function CartaRecomendacaoForm({
   action,
   membros,
 }: {
-  action: Action;
+  action: (formData: FormData) => Promise<unknown>;
   membros: Membro[];
 }) {
-  const [state, formAction, isPending] = useActionState<CartaRecomendacaoFormState, FormData>(
-    action,
-    {},
-  );
-  const membroItems = Object.fromEntries(membros.map((m) => [String(m.id), m.nomeCompleto]));
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
+  const membroItems = Object.fromEntries(membros.map((m) => [m.id, m.nomeCompleto]));
+
+  async function handleSubmit(formData: FormData) {
+    setError(null);
+    setIsPending(true);
+    try {
+      await action(formData);
+      toast.success("Carta salva.");
+      router.push("/cartas/recomendacao");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao salvar.");
+    } finally {
+      setIsPending(false);
+    }
+  }
 
   return (
-    <form action={formAction}>
+    <form action={handleSubmit}>
       <FieldSet>
         <FieldGroup>
           <Field orientation="responsive">
@@ -49,7 +58,7 @@ export function CartaRecomendacaoForm({
                 </SelectTrigger>
                 <SelectContent>
                   {membros.map((m) => (
-                    <SelectItem key={m.id} value={String(m.id)}>
+                    <SelectItem key={m.id} value={m.id}>
                       {m.nomeCompleto}
                     </SelectItem>
                   ))}
@@ -72,11 +81,7 @@ export function CartaRecomendacaoForm({
 
           <Field>
             <FieldLabel htmlFor="destinatario">Destinatário</FieldLabel>
-            <Input
-              id="destinatario"
-              name="destinatario"
-              placeholder="Ex: À Igreja Batista Central"
-            />
+            <Input id="destinatario" name="destinatario" placeholder="Ex: À Igreja Batista Central" />
           </Field>
 
           <Field>
@@ -89,10 +94,10 @@ export function CartaRecomendacaoForm({
             <Textarea id="observacoes" name="observacoes" rows={2} />
           </Field>
 
-          {state.error && <FieldError>{state.error}</FieldError>}
+          {error && <FieldError>{error}</FieldError>}
 
           <Button type="submit" disabled={isPending}>
-            {isPending ? "Salvando..." : "Salvar e gerar"}
+            {isPending ? "Salvando..." : "Salvar"}
           </Button>
         </FieldGroup>
       </FieldSet>

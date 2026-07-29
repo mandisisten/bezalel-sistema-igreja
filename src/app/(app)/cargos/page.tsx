@@ -1,7 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { Plus, Pencil } from "lucide-react";
-import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { orderBy } from "firebase/firestore";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useCollectionData } from "@/lib/firestore-hooks";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,15 +16,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DeleteButton } from "@/components/shared/delete-button";
-import { deleteCargo } from "./actions";
+import { deleteCargo, type CargoInput } from "./actions";
 
-export default async function CargosPage() {
-  await requireRole(["ADMIN"]);
-
-  const cargos = await prisma.cargo.findMany({
-    orderBy: { ordem: "asc" },
-    include: { _count: { select: { membros: true } } },
-  });
+function CargosContent() {
+  const { data: cargos, loading } = useCollectionData<CargoInput>("cargos", [
+    orderBy("ordem", "asc"),
+  ]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -45,7 +45,6 @@ export default async function CargosPage() {
               <TableHead>Ordem</TableHead>
               <TableHead>Nome</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Membros</TableHead>
               <TableHead className="w-24 text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -59,7 +58,6 @@ export default async function CargosPage() {
                     {cargo.ativo ? "Ativo" : "Inativo"}
                   </Badge>
                 </TableCell>
-                <TableCell>{cargo._count.membros}</TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
                     <Button
@@ -67,12 +65,12 @@ export default async function CargosPage() {
                       size="icon-sm"
                       aria-label="Editar"
                       nativeButton={false}
-                      render={<Link href={`/cargos/${cargo.id}`} />}
+                      render={<Link href={`/cargos/editar?id=${cargo.id}`} />}
                     >
                       <Pencil className="size-4" />
                     </Button>
                     <DeleteButton
-                      action={deleteCargo.bind(null, cargo.id)}
+                      action={() => deleteCargo(cargo.id)}
                       title={`Excluir "${cargo.nome}"?`}
                       description="Esta ação não pode ser desfeita. O cargo só pode ser excluído se não houver membros vinculados a ele."
                     />
@@ -80,9 +78,9 @@ export default async function CargosPage() {
                 </TableCell>
               </TableRow>
             ))}
-            {cargos.length === 0 && (
+            {!loading && cargos.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableCell colSpan={4} className="text-center text-muted-foreground">
                   Nenhum cargo cadastrado.
                 </TableCell>
               </TableRow>
@@ -91,5 +89,13 @@ export default async function CargosPage() {
         </Table>
       </div>
     </div>
+  );
+}
+
+export default function CargosPage() {
+  return (
+    <AuthGuard roles={["ADMIN"]}>
+      <CargosContent />
+    </AuthGuard>
   );
 }

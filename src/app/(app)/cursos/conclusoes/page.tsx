@@ -1,8 +1,15 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { Plus, ArrowLeft } from "lucide-react";
-import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
-import { formatDate } from "@/lib/format";
+import { Plus, ArrowLeft, FileDown } from "lucide-react";
+import { orderBy } from "firebase/firestore";
+import { toast } from "sonner";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useAuth } from "@/lib/firebase-auth";
+import { useCollectionData, useConfiguracao, type WithId } from "@/lib/firestore-hooks";
+import { formatTimestamp } from "@/lib/firestore-utils";
+import { gerarCertificadoCurso } from "@/lib/pdf-client";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -13,15 +20,34 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DeleteButton } from "@/components/shared/delete-button";
-import { deleteConclusao } from "./actions";
+import { deleteConclusao, type ConclusaoInput } from "./actions";
+import type { CursoInput } from "../actions";
 
-export default async function ConclusoesPage() {
-  await requireUser();
+function ConclusoesContent() {
+  const { profile, user } = useAuth();
+  const canManage = profile?.role === "ADMIN" || profile?.role === "SECRETARIA";
+  const { configuracao } = useConfiguracao();
+  const { data: conclusoes, loading } = useCollectionData<ConclusaoInput>("cursoConclusoes", [
+    orderBy("dataConclusao", "desc"),
+  ]);
+  const { data: cursos } = useCollectionData<CursoInput>("cursos", []);
+  const [gerandoId, setGerandoId] = useState<string | null>(null);
 
-  const conclusoes = await prisma.cursoConclusao.findMany({
-    orderBy: { dataConclusao: "desc" },
-    include: { curso: true, membro: true },
-  });
+  async function handleCertificado(conclusao: WithId<ConclusaoInput>) {
+    if (!user || !profile) return;
+    setGerandoId(conclusao.id);
+    try {
+      const curso = cursos.find((c) => c.id === conclusao.cursoId);
+      await gerarCertificadoCurso(conclusao, curso?.cargaHoraria ?? null, configuracao, {
+        uid: user.uid,
+        nome: profile.nome,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar PDF.");
+    } finally {
+      setGerandoId(null);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -41,10 +67,12 @@ export default async function ConclusoesPage() {
           </div>
           <p className="text-muted-foreground">{conclusoes.length} registro(s).</p>
         </div>
-        <Button nativeButton={false} render={<Link href="/cursos/conclusoes/novo" />}>
-          <Plus className="size-4" />
-          Nova conclusão
-        </Button>
+        {canManage && (
+          <Button nativeButton={false} render={<Link href="/cursos/conclusoes/novo" />}>
+            <Plus className="size-4" />
+            Nova conclusão
+          </Button>
+        )}
       </div>
 
       <div className="overflow-x-auto rounded-lg border">
@@ -55,48 +83,49 @@ export default async function ConclusoesPage() {
               <TableHead>Curso</TableHead>
               <TableHead>Conclusão</TableHead>
               <TableHead>Instrutor</TableHead>
-              <TableHead className="w-24 text-right">Ações</TableHead>
+              <TableHead className="w-40 text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {conclusoes.map((c) => (
               <TableRow key={c.id}>
-                <TableCell className="font-medium">
-                  <Link href={`/cursos/conclusoes/${c.id}`}>{c.membro.nomeCompleto}</Link>
-                </TableCell>
-                <TableCell>{c.curso.nome}</TableCell>
-                <TableCell>{formatDate(c.dataConclusao)}</TableCell>
+                <TableCell className="font-medium">{c.membroNome ?? "—"}</TableCell>
+                <TableCell>{c.cursoNome ?? "—"}</TableCell>
+                <TableCell>{formatTimestamp(c.dataConclusao)}</TableCell>
                 <TableCell>{c.instrutor || "—"}</TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
-                      nativeButton={false}
-                      render={
-                        <Link href={`/api/documentos/certificado-curso/${c.id}`} target="_blank" />
-                      }
+                      disabled={gerandoId === c.id}
+                      onClick={() => handleCertificado(c)}
                     >
-                      Certificado
+                      <FileDown className="size-4" />
+                      {gerandoId === c.id ? "Gerando..." : "Certificado"}
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      nativeButton={false}
-                      render={<Link href={`/cursos/conclusoes/${c.id}`} />}
-                    >
-                      Editar
-                    </Button>
-                    <DeleteButton
-                      action={deleteConclusao.bind(null, c.id)}
-                      title="Excluir registro de conclusão?"
-                      description="Esta ação não pode ser desfeita."
-                    />
+                    {canManage && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        nativeButton={false}
+                        render={<Link href={`/cursos/conclusoes/editar?id=${c.id}`} />}
+                      >
+                        Editar
+                      </Button>
+                    )}
+                    {profile?.role === "ADMIN" && (
+                      <DeleteButton
+                        action={() => deleteConclusao(c.id)}
+                        title="Excluir registro de conclusão?"
+                        description="Esta ação não pode ser desfeita."
+                      />
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
             ))}
-            {conclusoes.length === 0 && (
+            {!loading && conclusoes.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
                   Nenhuma conclusão registrada.
@@ -107,5 +136,13 @@ export default async function ConclusoesPage() {
         </Table>
       </div>
     </div>
+  );
+}
+
+export default function ConclusoesPage() {
+  return (
+    <AuthGuard>
+      <ConclusoesContent />
+    </AuthGuard>
   );
 }

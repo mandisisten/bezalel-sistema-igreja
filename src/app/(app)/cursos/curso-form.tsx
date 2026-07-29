@@ -1,20 +1,19 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldGroup, FieldLabel, FieldError, FieldSet } from "@/components/ui/field";
-import type { CursoFormState } from "./actions";
-
-type Action = (state: CursoFormState, formData: FormData) => Promise<CursoFormState>;
 
 export function CursoForm({
   action,
   defaultValues,
 }: {
-  action: Action;
+  action: (formData: FormData) => Promise<unknown>;
   defaultValues?: {
     nome: string;
     cargaHoraria: number | null;
@@ -22,10 +21,26 @@ export function CursoForm({
     ativo: boolean;
   };
 }) {
-  const [state, formAction, isPending] = useActionState<CursoFormState, FormData>(action, {});
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
+
+  async function handleSubmit(formData: FormData) {
+    setError(null);
+    setIsPending(true);
+    try {
+      await action(formData);
+      toast.success("Curso salvo.");
+      router.push("/cursos");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao salvar.");
+    } finally {
+      setIsPending(false);
+    }
+  }
 
   return (
-    <form action={formAction}>
+    <form action={handleSubmit}>
       <FieldSet>
         <FieldGroup>
           <Field orientation="responsive">
@@ -60,7 +75,7 @@ export function CursoForm({
             <FieldLabel htmlFor="ativo">Curso ativo</FieldLabel>
           </Field>
 
-          {state.error && <FieldError>{state.error}</FieldError>}
+          {error && <FieldError>{error}</FieldError>}
 
           <Button type="submit" disabled={isPending}>
             {isPending ? "Salvando..." : "Salvar"}

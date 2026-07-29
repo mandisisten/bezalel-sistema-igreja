@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,12 +37,11 @@ const ESTADO_CIVIL_ITEMS = toSelectItems(ESTADO_CIVIL_OPTIONS);
 const FORMA_ADMISSAO_ITEMS = toSelectItems(FORMA_ADMISSAO_OPTIONS);
 const STATUS_MEMBRO_ITEMS = toSelectItems(STATUS_MEMBRO_OPTIONS);
 const ESCOLARIDADE_ITEMS = toSelectItems(ESCOLARIDADE_OPTIONS);
-import type { MembroFormState } from "./actions";
 
-type Action = (state: MembroFormState, formData: FormData) => Promise<MembroFormState>;
+type Action = (formData: FormData) => Promise<unknown>;
 
-type Congregacao = { id: number; nome: string };
-type Cargo = { id: number; nome: string };
+type Congregacao = { id: string; nome: string };
+type Cargo = { id: string; nome: string };
 
 type DefaultValues = {
   nomeCompleto: string;
@@ -70,8 +71,8 @@ type DefaultValues = {
   dataConversao: string | null;
   dataAdmissao: string | null;
   formaAdmissao: string | null;
-  congregacaoId: number;
-  cargoId: number | null;
+  congregacaoId: string;
+  cargoId: string | null;
   status: string;
   dataSaida: string | null;
   motivoSaida: string | null;
@@ -89,16 +90,29 @@ export function MembroForm({
   cargos: Cargo[];
   defaultValues?: DefaultValues;
 }) {
-  const [state, formAction, isPending] = useActionState<MembroFormState, FormData>(
-    action,
-    {},
-  );
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
   const [preview, setPreview] = useState<string | null>(defaultValues?.fotoUrl ?? null);
   const congregacaoItems = Object.fromEntries(congregacoes.map((c) => [String(c.id), c.nome]));
   const cargoItems = Object.fromEntries(cargos.map((c) => [String(c.id), c.nome]));
 
+  async function handleSubmit(formData: FormData) {
+    setError(null);
+    setIsPending(true);
+    try {
+      const id = await action(formData);
+      toast.success("Membro salvo.");
+      router.push(typeof id === "string" ? `/membros/editar?id=${id}` : "/membros");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao salvar.");
+    } finally {
+      setIsPending(false);
+    }
+  }
+
   return (
-    <form action={formAction}>
+    <form action={handleSubmit}>
       <FieldGroup>
         <FieldSet>
           <FieldLegend>Foto</FieldLegend>
@@ -492,7 +506,7 @@ export function MembroForm({
           </FieldGroup>
         </FieldSet>
 
-        {state.error && <FieldError>{state.error}</FieldError>}
+        {error && <FieldError>{error}</FieldError>}
 
         <div>
           <Button type="submit" disabled={isPending}>

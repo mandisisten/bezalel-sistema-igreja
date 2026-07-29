@@ -1,7 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { LogOut, User } from "lucide-react";
-import { logoutAction } from "@/app/login/actions";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -33,6 +35,13 @@ export function UserMenu({
   email: string;
   role: Role;
 }) {
+  const router = useRouter();
+
+  async function handleLogout() {
+    await signOut(auth);
+    router.push("/login");
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -52,15 +61,14 @@ export function UserMenu({
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <form action={logoutAction}>
-          <DropdownMenuItem
-            nativeButton
-            render={<button type="submit" className="flex w-full items-center gap-2" />}
-          >
-            <LogOut className="size-4" />
-            Sair
-          </DropdownMenuItem>
-        </form>
+        <DropdownMenuItem
+          nativeButton
+          render={<button type="button" className="flex w-full items-center gap-2" />}
+          onClick={handleLogout}
+        >
+          <LogOut className="size-4" />
+          Sair
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -1,8 +1,15 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
-import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
-import { formatDate } from "@/lib/format";
+import { Plus, FileDown } from "lucide-react";
+import { orderBy } from "firebase/firestore";
+import { toast } from "sonner";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useAuth } from "@/lib/firebase-auth";
+import { useCollectionData, useConfiguracao, type WithId } from "@/lib/firestore-hooks";
+import { formatTimestamp } from "@/lib/firestore-utils";
+import { gerarCertificadoBatismo } from "@/lib/pdf-client";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -13,15 +20,28 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DeleteButton } from "@/components/shared/delete-button";
-import { deleteBatismo } from "./actions";
+import { deleteBatismo, type BatismoInput } from "./actions";
 
-export default async function BatismosPage() {
-  await requireUser();
+function BatismosContent() {
+  const { profile, user } = useAuth();
+  const canManage = profile?.role === "ADMIN" || profile?.role === "SECRETARIA";
+  const { configuracao } = useConfiguracao();
+  const { data: batismos, loading } = useCollectionData<BatismoInput>("batismos", [
+    orderBy("data", "desc"),
+  ]);
+  const [gerandoId, setGerandoId] = useState<string | null>(null);
 
-  const batismos = await prisma.batismo.findMany({
-    orderBy: { data: "desc" },
-    include: { membro: true, congregacao: true },
-  });
+  async function handleCertificado(batismo: WithId<BatismoInput>) {
+    if (!user || !profile) return;
+    setGerandoId(batismo.id);
+    try {
+      await gerarCertificadoBatismo(batismo, configuracao, { uid: user.uid, nome: profile.nome });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar PDF.");
+    } finally {
+      setGerandoId(null);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -30,10 +50,12 @@ export default async function BatismosPage() {
           <h1 className="text-2xl font-semibold">Batismos</h1>
           <p className="text-muted-foreground">{batismos.length} registro(s).</p>
         </div>
-        <Button nativeButton={false} render={<Link href="/batismos/novo" />}>
-          <Plus className="size-4" />
-          Novo batismo
-        </Button>
+        {canManage && (
+          <Button nativeButton={false} render={<Link href="/batismos/novo" />}>
+            <Plus className="size-4" />
+            Novo batismo
+          </Button>
+        )}
       </div>
 
       <div className="overflow-x-auto rounded-lg border">
@@ -45,49 +67,50 @@ export default async function BatismosPage() {
               <TableHead>Local</TableHead>
               <TableHead>Oficiante</TableHead>
               <TableHead>Congregação</TableHead>
-              <TableHead className="w-24 text-right">Ações</TableHead>
+              <TableHead className="w-40 text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {batismos.map((b) => (
               <TableRow key={b.id}>
-                <TableCell className="font-medium">
-                  <Link href={`/batismos/${b.id}`}>{b.membro.nomeCompleto}</Link>
-                </TableCell>
-                <TableCell>{formatDate(b.data)}</TableCell>
+                <TableCell className="font-medium">{b.membroNome ?? "—"}</TableCell>
+                <TableCell>{formatTimestamp(b.data)}</TableCell>
                 <TableCell>{b.local || "—"}</TableCell>
                 <TableCell>{b.oficiante || "—"}</TableCell>
-                <TableCell>{b.congregacao?.nome ?? "—"}</TableCell>
+                <TableCell>{b.congregacaoNome ?? "—"}</TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
-                      nativeButton={false}
-                      render={
-                        <Link href={`/api/documentos/certificado-batismo/${b.id}`} target="_blank" />
-                      }
+                      disabled={gerandoId === b.id}
+                      onClick={() => handleCertificado(b)}
                     >
-                      Certificado
+                      <FileDown className="size-4" />
+                      {gerandoId === b.id ? "Gerando..." : "Certificado"}
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      nativeButton={false}
-                      render={<Link href={`/batismos/${b.id}`} />}
-                    >
-                      Editar
-                    </Button>
-                    <DeleteButton
-                      action={deleteBatismo.bind(null, b.id)}
-                      title="Excluir registro de batismo?"
-                      description="Esta ação não pode ser desfeita."
-                    />
+                    {canManage && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        nativeButton={false}
+                        render={<Link href={`/batismos/editar?id=${b.id}`} />}
+                      >
+                        Editar
+                      </Button>
+                    )}
+                    {profile?.role === "ADMIN" && (
+                      <DeleteButton
+                        action={() => deleteBatismo(b.id)}
+                        title="Excluir registro de batismo?"
+                        description="Esta ação não pode ser desfeita."
+                      />
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
             ))}
-            {batismos.length === 0 && (
+            {!loading && batismos.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground">
                   Nenhum batismo registrado.
@@ -98,5 +121,13 @@ export default async function BatismosPage() {
         </Table>
       </div>
     </div>
+  );
+}
+
+export default function BatismosPage() {
+  return (
+    <AuthGuard>
+      <BatismosContent />
+    </AuthGuard>
   );
 }

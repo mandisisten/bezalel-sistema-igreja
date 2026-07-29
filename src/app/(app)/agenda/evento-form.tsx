@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,12 +16,9 @@ import {
 import { Field, FieldGroup, FieldLabel, FieldError, FieldSet } from "@/components/ui/field";
 import { TIPO_EVENTO_OPTIONS, RECORRENCIA_OPTIONS } from "@/lib/evento-options";
 import { toSelectItems } from "@/lib/member-options";
-import type { EventoFormState } from "./actions";
 
-type Action = (state: EventoFormState, formData: FormData) => Promise<EventoFormState>;
-
-type Membro = { id: number; nomeCompleto: string };
-type Congregacao = { id: number; nome: string };
+type Membro = { id: string; nomeCompleto: string };
+type Congregacao = { id: string; nome: string };
 
 const TIPO_ITEMS = toSelectItems(TIPO_EVENTO_OPTIONS);
 const RECORRENCIA_ITEMS = toSelectItems(RECORRENCIA_OPTIONS);
@@ -30,7 +29,7 @@ export function EventoForm({
   congregacoes,
   defaultValues,
 }: {
-  action: Action;
+  action: (formData: FormData) => Promise<unknown>;
   membros: Membro[];
   congregacoes: Congregacao[];
   defaultValues?: {
@@ -40,17 +39,33 @@ export function EventoForm({
     fim: string;
     local: string | null;
     tipo: string | null;
-    congregacaoId: number | null;
-    responsavelId: number | null;
+    congregacaoId: string | null;
+    responsavelId: string | null;
     recorrencia: string | null;
   };
 }) {
-  const [state, formAction, isPending] = useActionState<EventoFormState, FormData>(action, {});
-  const membroItems = Object.fromEntries(membros.map((m) => [String(m.id), m.nomeCompleto]));
-  const congregacaoItems = Object.fromEntries(congregacoes.map((c) => [String(c.id), c.nome]));
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
+  const membroItems = Object.fromEntries(membros.map((m) => [m.id, m.nomeCompleto]));
+  const congregacaoItems = Object.fromEntries(congregacoes.map((c) => [c.id, c.nome]));
+
+  async function handleSubmit(formData: FormData) {
+    setError(null);
+    setIsPending(true);
+    try {
+      await action(formData);
+      toast.success("Evento salvo.");
+      router.push("/agenda");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao salvar.");
+    } finally {
+      setIsPending(false);
+    }
+  }
 
   return (
-    <form action={formAction}>
+    <form action={handleSubmit}>
       <FieldSet>
         <FieldGroup>
           <Field>
@@ -128,16 +143,14 @@ export function EventoForm({
               <Select
                 name="congregacaoId"
                 items={congregacaoItems}
-                defaultValue={
-                  defaultValues?.congregacaoId ? String(defaultValues.congregacaoId) : undefined
-                }
+                defaultValue={defaultValues?.congregacaoId ?? undefined}
               >
                 <SelectTrigger id="congregacaoId" className="w-full">
                   <SelectValue placeholder="Todas" />
                 </SelectTrigger>
                 <SelectContent>
                   {congregacoes.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
+                    <SelectItem key={c.id} value={c.id}>
                       {c.nome}
                     </SelectItem>
                   ))}
@@ -149,16 +162,14 @@ export function EventoForm({
               <Select
                 name="responsavelId"
                 items={membroItems}
-                defaultValue={
-                  defaultValues?.responsavelId ? String(defaultValues.responsavelId) : undefined
-                }
+                defaultValue={defaultValues?.responsavelId ?? undefined}
               >
                 <SelectTrigger id="responsavelId" className="w-full">
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
                   {membros.map((m) => (
-                    <SelectItem key={m.id} value={String(m.id)}>
+                    <SelectItem key={m.id} value={m.id}>
                       {m.nomeCompleto}
                     </SelectItem>
                   ))}
@@ -177,7 +188,7 @@ export function EventoForm({
             />
           </Field>
 
-          {state.error && <FieldError>{state.error}</FieldError>}
+          {error && <FieldError>{error}</FieldError>}
 
           <Button type="submit" disabled={isPending}>
             {isPending ? "Salvando..." : "Salvar"}

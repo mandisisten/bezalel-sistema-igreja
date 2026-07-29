@@ -1,7 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import { Plus, Pencil, GraduationCap } from "lucide-react";
-import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
+import { orderBy } from "firebase/firestore";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useAuth } from "@/lib/firebase-auth";
+import { useCollectionData } from "@/lib/firestore-hooks";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,15 +17,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DeleteButton } from "@/components/shared/delete-button";
-import { deleteCurso } from "./actions";
+import { deleteCurso, type CursoInput } from "./actions";
+import type { ConclusaoInput } from "./conclusoes/actions";
 
-export default async function CursosPage() {
-  await requireUser();
-
-  const cursos = await prisma.curso.findMany({
-    orderBy: { nome: "asc" },
-    include: { _count: { select: { conclusoes: true } } },
-  });
+function CursosContent() {
+  const { profile } = useAuth();
+  const canManage = profile?.role === "ADMIN" || profile?.role === "SECRETARIA";
+  const { data: cursos, loading } = useCollectionData<CursoInput>("cursos", [
+    orderBy("nome", "asc"),
+  ]);
+  const { data: conclusoes } = useCollectionData<ConclusaoInput>("cursoConclusoes", []);
 
   return (
     <div className="flex flex-col gap-4">
@@ -31,18 +36,16 @@ export default async function CursosPage() {
           <p className="text-muted-foreground">Catálogo de cursos oferecidos pela igreja.</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            nativeButton={false}
-            render={<Link href="/cursos/conclusoes" />}
-          >
+          <Button variant="outline" nativeButton={false} render={<Link href="/cursos/conclusoes" />}>
             <GraduationCap className="size-4" />
             Conclusões
           </Button>
-          <Button nativeButton={false} render={<Link href="/cursos/novo" />}>
-            <Plus className="size-4" />
-            Novo curso
-          </Button>
+          {canManage && (
+            <Button nativeButton={false} render={<Link href="/cursos/novo" />}>
+              <Plus className="size-4" />
+              Novo curso
+            </Button>
+          )}
         </div>
       </div>
 
@@ -67,28 +70,32 @@ export default async function CursosPage() {
                     {c.ativo ? "Ativo" : "Inativo"}
                   </Badge>
                 </TableCell>
-                <TableCell>{c._count.conclusoes}</TableCell>
+                <TableCell>{conclusoes.filter((cc) => cc.cursoId === c.id).length}</TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Editar"
-                      nativeButton={false}
-                      render={<Link href={`/cursos/${c.id}`} />}
-                    >
-                      <Pencil className="size-4" />
-                    </Button>
-                    <DeleteButton
-                      action={deleteCurso.bind(null, c.id)}
-                      title={`Excluir "${c.nome}"?`}
-                      description="Esta ação não pode ser desfeita. O curso só pode ser excluído se não houver conclusões vinculadas."
-                    />
+                    {canManage && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Editar"
+                        nativeButton={false}
+                        render={<Link href={`/cursos/editar?id=${c.id}`} />}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                    )}
+                    {profile?.role === "ADMIN" && (
+                      <DeleteButton
+                        action={() => deleteCurso(c.id)}
+                        title={`Excluir "${c.nome}"?`}
+                        description="Esta ação não pode ser desfeita. O curso só pode ser excluído se não houver conclusões vinculadas."
+                      />
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
             ))}
-            {cursos.length === 0 && (
+            {!loading && cursos.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
                   Nenhum curso cadastrado.
@@ -99,5 +106,13 @@ export default async function CursosPage() {
         </Table>
       </div>
     </div>
+  );
+}
+
+export default function CursosPage() {
+  return (
+    <AuthGuard>
+      <CursosContent />
+    </AuthGuard>
   );
 }

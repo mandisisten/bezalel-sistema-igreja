@@ -1,7 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { Plus, Pencil } from "lucide-react";
-import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { orderBy } from "firebase/firestore";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useCollectionData } from "@/lib/firestore-hooks";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,15 +16,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DeleteButton } from "@/components/shared/delete-button";
-import { deleteCongregacao } from "./actions";
+import { deleteCongregacao, type CongregacaoInput } from "./actions";
 
-export default async function CongregacoesPage() {
-  await requireRole(["ADMIN"]);
-
-  const congregacoes = await prisma.congregacao.findMany({
-    orderBy: [{ matriz: "desc" }, { nome: "asc" }],
-    include: { _count: { select: { membros: true } } },
-  });
+function CongregacoesContent() {
+  const { data: congregacoes, loading } = useCollectionData<CongregacaoInput>(
+    "congregacoes",
+    [orderBy("nome", "asc")],
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -43,7 +44,6 @@ export default async function CongregacoesPage() {
               <TableHead>Nome</TableHead>
               <TableHead>Cidade/UF</TableHead>
               <TableHead>Pastor responsável</TableHead>
-              <TableHead>Membros</TableHead>
               <TableHead className="w-24 text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -60,7 +60,6 @@ export default async function CongregacoesPage() {
                   {[c.cidade, c.uf].filter(Boolean).join(" / ") || "—"}
                 </TableCell>
                 <TableCell>{c.pastorResponsavel || "—"}</TableCell>
-                <TableCell>{c._count.membros}</TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
                     <Button
@@ -68,22 +67,22 @@ export default async function CongregacoesPage() {
                       size="icon-sm"
                       aria-label="Editar"
                       nativeButton={false}
-                      render={<Link href={`/congregacoes/${c.id}`} />}
+                      render={<Link href={`/congregacoes/editar?id=${c.id}`} />}
                     >
                       <Pencil className="size-4" />
                     </Button>
                     <DeleteButton
-                      action={deleteCongregacao.bind(null, c.id)}
+                      action={() => deleteCongregacao(c.id)}
                       title={`Excluir "${c.nome}"?`}
-                      description="Esta ação não pode ser desfeita. A congregação só pode ser excluída se não houver membros ou registros vinculados a ela."
+                      description="Esta ação não pode ser desfeita. A congregação só pode ser excluída se não houver membros vinculados a ela."
                     />
                   </div>
                 </TableCell>
               </TableRow>
             ))}
-            {congregacoes.length === 0 && (
+            {!loading && congregacoes.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableCell colSpan={4} className="text-center text-muted-foreground">
                   Nenhuma congregação cadastrada.
                 </TableCell>
               </TableRow>
@@ -92,5 +91,13 @@ export default async function CongregacoesPage() {
         </Table>
       </div>
     </div>
+  );
+}
+
+export default function CongregacoesPage() {
+  return (
+    <AuthGuard roles={["ADMIN"]}>
+      <CongregacoesContent />
+    </AuthGuard>
   );
 }

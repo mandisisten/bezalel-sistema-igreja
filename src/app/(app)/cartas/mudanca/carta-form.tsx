@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,31 +14,41 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldGroup, FieldLabel, FieldError, FieldSet, FieldDescription } from "@/components/ui/field";
-import type { CartaMudancaFormState } from "./actions";
 
-type Action = (state: CartaMudancaFormState, formData: FormData) => Promise<CartaMudancaFormState>;
-
-type Membro = { id: number; nomeCompleto: string };
-type Congregacao = { id: number; nome: string };
+type Membro = { id: string; nomeCompleto: string };
+type Congregacao = { id: string; nome: string };
 
 export function CartaMudancaForm({
   action,
   membros,
   congregacoes,
 }: {
-  action: Action;
+  action: (formData: FormData) => Promise<unknown>;
   membros: Membro[];
   congregacoes: Congregacao[];
 }) {
-  const [state, formAction, isPending] = useActionState<CartaMudancaFormState, FormData>(
-    action,
-    {},
-  );
-  const membroItems = Object.fromEntries(membros.map((m) => [String(m.id), m.nomeCompleto]));
-  const congregacaoItems = Object.fromEntries(congregacoes.map((c) => [String(c.id), c.nome]));
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
+  const membroItems = Object.fromEntries(membros.map((m) => [m.id, m.nomeCompleto]));
+  const congregacaoItems = Object.fromEntries(congregacoes.map((c) => [c.id, c.nome]));
+
+  async function handleSubmit(formData: FormData) {
+    setError(null);
+    setIsPending(true);
+    try {
+      await action(formData);
+      toast.success("Carta salva.");
+      router.push("/cartas/mudanca");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao salvar.");
+    } finally {
+      setIsPending(false);
+    }
+  }
 
   return (
-    <form action={formAction}>
+    <form action={handleSubmit}>
       <FieldSet>
         <FieldGroup>
           <Field>
@@ -47,7 +59,7 @@ export function CartaMudancaForm({
               </SelectTrigger>
               <SelectContent>
                 {membros.map((m) => (
-                  <SelectItem key={m.id} value={String(m.id)}>
+                  <SelectItem key={m.id} value={m.id}>
                     {m.nomeCompleto}
                   </SelectItem>
                 ))}
@@ -64,7 +76,7 @@ export function CartaMudancaForm({
                 </SelectTrigger>
                 <SelectContent>
                   {congregacoes.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
+                    <SelectItem key={c.id} value={c.id}>
                       {c.nome}
                     </SelectItem>
                   ))}
@@ -88,10 +100,10 @@ export function CartaMudancaForm({
             <Textarea id="observacoes" name="observacoes" rows={2} />
           </Field>
 
-          {state.error && <FieldError>{state.error}</FieldError>}
+          {error && <FieldError>{error}</FieldError>}
 
           <Button type="submit" disabled={isPending}>
-            {isPending ? "Salvando..." : "Salvar e gerar"}
+            {isPending ? "Salvando..." : "Salvar"}
           </Button>
         </FieldGroup>
       </FieldSet>

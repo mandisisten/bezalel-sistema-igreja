@@ -1,0 +1,119 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userRole() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && userRole() == 'ADMIN';
+    }
+
+    function isSecretaria() {
+      return isSignedIn() && userRole() == 'SECRETARIA';
+    }
+
+    function isLideranca() {
+      return isSignedIn() && userRole() == 'LIDERANCA';
+    }
+
+    function canManage() {
+      return isAdmin() || isSecretaria();
+    }
+
+    function canManageAgenda() {
+      return isAdmin() || isSecretaria() || isLideranca();
+    }
+
+    // Dados públicos usados na tela de login (nome/logo da igreja), antes de autenticar.
+    match /configuracao/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /usuarios/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /congregacoes/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /cargos/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /membros/{id} {
+      allow read: if isSignedIn();
+      allow create, update: if canManage();
+      allow delete: if isAdmin();
+
+      match /cargoHistorico/{histId} {
+        allow read: if isSignedIn();
+        allow write: if canManage();
+      }
+    }
+
+    match /batismos/{id} {
+      allow read: if isSignedIn();
+      allow create, update: if canManage();
+      allow delete: if isAdmin();
+    }
+
+    match /apresentacoes/{id} {
+      allow read: if isSignedIn();
+      allow create, update: if canManage();
+      allow delete: if isAdmin();
+    }
+
+    match /cursos/{id} {
+      allow read: if isSignedIn();
+      allow create, update: if canManage();
+      allow delete: if isAdmin();
+    }
+
+    match /cursoConclusoes/{id} {
+      allow read: if isSignedIn();
+      allow create, update: if canManage();
+      allow delete: if isAdmin();
+    }
+
+    match /cartasRecomendacao/{id} {
+      allow read: if isSignedIn();
+      allow create, update: if canManageAgenda();
+      allow delete: if isAdmin();
+    }
+
+    match /cartasMudanca/{id} {
+      allow read: if isSignedIn();
+      allow create, update: if canManageAgenda();
+      allow delete: if isAdmin();
+    }
+
+    match /documentos/{id} {
+      allow read: if isSignedIn();
+      allow create: if canManageAgenda();
+      allow update, delete: if isAdmin();
+    }
+
+    match /eventos/{id} {
+      allow read: if isSignedIn();
+      allow create, update: if canManageAgenda();
+      allow delete: if canManageAgenda();
+    }
+
+    match /counters/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+  }
+}

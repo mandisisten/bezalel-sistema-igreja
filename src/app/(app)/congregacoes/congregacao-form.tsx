@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,18 +13,12 @@ import {
   FieldError,
   FieldSet,
 } from "@/components/ui/field";
-import type { CongregacaoFormState } from "./actions";
-
-type Action = (
-  state: CongregacaoFormState,
-  formData: FormData,
-) => Promise<CongregacaoFormState>;
 
 export function CongregacaoForm({
   action,
   defaultValues,
 }: {
-  action: Action;
+  action: (formData: FormData) => Promise<unknown>;
   defaultValues?: {
     nome: string;
     matriz: boolean;
@@ -34,13 +30,26 @@ export function CongregacaoForm({
     dataFundacao: string | null;
   };
 }) {
-  const [state, formAction, isPending] = useActionState<
-    CongregacaoFormState,
-    FormData
-  >(action, {});
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
+
+  async function handleSubmit(formData: FormData) {
+    setError(null);
+    setIsPending(true);
+    try {
+      await action(formData);
+      toast.success("Congregação salva.");
+      router.push("/congregacoes");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao salvar.");
+    } finally {
+      setIsPending(false);
+    }
+  }
 
   return (
-    <form action={formAction}>
+    <form action={handleSubmit}>
       <FieldSet>
         <FieldGroup>
           <Field>
@@ -93,7 +102,7 @@ export function CongregacaoForm({
             />
           </Field>
 
-          {state.error && <FieldError>{state.error}</FieldError>}
+          {error && <FieldError>{error}</FieldError>}
 
           <div className="flex gap-2">
             <Button type="submit" disabled={isPending}>

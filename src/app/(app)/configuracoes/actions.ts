@@ -1,56 +1,49 @@
-"use server";
+import { doc, setDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
 
-import { z } from "zod";
-import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
-import { saveChurchLogo, deleteChurchLogo } from "@/lib/upload";
-import { getConfiguracao } from "@/lib/documento";
+async function uploadLogo(file: File): Promise<string> {
+  const ext = file.name.split(".").pop() || "png";
+  const path = `igreja/${crypto.randomUUID()}.${ext}`;
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, file);
+  return getDownloadURL(storageRef);
+}
 
-const configuracaoSchema = z.object({
-  nomeIgreja: z.string().min(2, "Informe o nome da igreja."),
-  cnpj: z.string().optional(),
-  enderecoSede: z.string().optional(),
-  telefoneSede: z.string().optional(),
-  nomePresidente: z.string().optional(),
-  cargoPresidente: z.string().optional(),
-});
+async function deleteLogo(logoUrl: string | null | undefined) {
+  if (!logoUrl) return;
+  try {
+    await deleteObject(ref(storage, logoUrl));
+  } catch {
+    // arquivo pode já não existir; ignora
+  }
+}
 
-export type ConfiguracaoFormState = { error?: string; success?: boolean };
-
-export async function updateConfiguracao(
-  _prevState: ConfiguracaoFormState,
-  formData: FormData,
-): Promise<ConfiguracaoFormState> {
-  await requireRole(["ADMIN"]);
-
-  const parsed = configuracaoSchema.safeParse({
-    nomeIgreja: formData.get("nomeIgreja"),
-    cnpj: formData.get("cnpj") || undefined,
-    enderecoSede: formData.get("enderecoSede") || undefined,
-    telefoneSede: formData.get("telefoneSede") || undefined,
-    nomePresidente: formData.get("nomePresidente") || undefined,
-    cargoPresidente: formData.get("cargoPresidente") || undefined,
-  });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+export async function updateConfiguracao(formData: FormData, logoAtual: string | null) {
+  const nomeIgreja = String(formData.get("nomeIgreja") ?? "");
+  if (!nomeIgreja || nomeIgreja.length < 2) {
+    throw new Error("Informe o nome da igreja.");
   }
 
   const logo = formData.get("logo");
   let logoUrl: string | undefined;
   if (logo instanceof File && logo.size > 0) {
-    const atual = await getConfiguracao();
-    logoUrl = await saveChurchLogo(logo);
-    await deleteChurchLogo(atual.logoUrl);
+    logoUrl = await uploadLogo(logo);
+    await deleteLogo(logoAtual);
   }
 
-  await prisma.configuracao.upsert({
-    where: { id: 1 },
-    update: { ...parsed.data, ...(logoUrl ? { logoUrl } : {}) },
-    create: { id: 1, ...parsed.data, logoUrl },
-  });
-
-  revalidatePath("/configuracoes");
-  revalidatePath("/", "layout");
-  return { success: true };
+  await setDoc(
+    doc(db, "configuracao", "geral"),
+    {
+      nomeIgreja,
+      cnpj: String(formData.get("cnpj") ?? "") || null,
+      enderecoSede: String(formData.get("enderecoSede") ?? "") || null,
+      telefoneSede: String(formData.get("telefoneSede") ?? "") || null,
+      nomePresidente: String(formData.get("nomePresidente") ?? "") || null,
+      cargoPresidente: String(formData.get("cargoPresidente") ?? "") || null,
+      ...(logoUrl ? { logoUrl } : {}),
+      updatedAt: new Date(),
+    },
+    { merge: true },
+  );
 }

@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,12 +14,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldGroup, FieldLabel, FieldError, FieldSet } from "@/components/ui/field";
-import type { BatismoFormState } from "./actions";
 
-type Action = (state: BatismoFormState, formData: FormData) => Promise<BatismoFormState>;
-
-type Membro = { id: number; nomeCompleto: string };
-type Congregacao = { id: number; nome: string };
+type Membro = { id: string; nomeCompleto: string };
+type Congregacao = { id: string; nome: string };
 
 export function BatismoForm({
   action,
@@ -25,43 +24,51 @@ export function BatismoForm({
   congregacoes,
   defaultValues,
 }: {
-  action: Action;
+  action: (formData: FormData) => Promise<unknown>;
   membros: Membro[];
   congregacoes: Congregacao[];
   defaultValues?: {
-    membroId: number;
+    membroId: string;
     data: string;
     local: string | null;
     oficiante: string | null;
     testemunhas: string | null;
-    congregacaoId: number | null;
+    congregacaoId: string | null;
   };
 }) {
-  const [state, formAction, isPending] = useActionState<BatismoFormState, FormData>(
-    action,
-    {},
-  );
-  const membroItems = Object.fromEntries(membros.map((m) => [String(m.id), m.nomeCompleto]));
-  const congregacaoItems = Object.fromEntries(congregacoes.map((c) => [String(c.id), c.nome]));
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
+  const membroItems = Object.fromEntries(membros.map((m) => [m.id, m.nomeCompleto]));
+  const congregacaoItems = Object.fromEntries(congregacoes.map((c) => [c.id, c.nome]));
+
+  async function handleSubmit(formData: FormData) {
+    setError(null);
+    setIsPending(true);
+    try {
+      await action(formData);
+      toast.success("Batismo salvo.");
+      router.push("/batismos");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao salvar.");
+    } finally {
+      setIsPending(false);
+    }
+  }
 
   return (
-    <form action={formAction}>
+    <form action={handleSubmit}>
       <FieldSet>
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="membroId">Membro batizado</FieldLabel>
-            <Select
-              name="membroId"
-              items={membroItems}
-              defaultValue={defaultValues?.membroId ? String(defaultValues.membroId) : undefined}
-              required
-            >
+            <Select name="membroId" items={membroItems} defaultValue={defaultValues?.membroId} required>
               <SelectTrigger id="membroId" className="w-full">
                 <SelectValue placeholder="Selecione" />
               </SelectTrigger>
               <SelectContent>
                 {membros.map((m) => (
-                  <SelectItem key={m.id} value={String(m.id)}>
+                  <SelectItem key={m.id} value={m.id}>
                     {m.nomeCompleto}
                   </SelectItem>
                 ))}
@@ -90,16 +97,14 @@ export function BatismoForm({
               <Select
                 name="congregacaoId"
                 items={congregacaoItems}
-                defaultValue={
-                  defaultValues?.congregacaoId ? String(defaultValues.congregacaoId) : undefined
-                }
+                defaultValue={defaultValues?.congregacaoId ?? undefined}
               >
                 <SelectTrigger id="congregacaoId" className="w-full">
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
                   {congregacoes.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
+                    <SelectItem key={c.id} value={c.id}>
                       {c.nome}
                     </SelectItem>
                   ))}
@@ -118,7 +123,7 @@ export function BatismoForm({
             />
           </Field>
 
-          {state.error && <FieldError>{state.error}</FieldError>}
+          {error && <FieldError>{error}</FieldError>}
 
           <Button type="submit" disabled={isPending}>
             {isPending ? "Salvando..." : "Salvar"}

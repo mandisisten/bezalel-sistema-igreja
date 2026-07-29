@@ -1,8 +1,13 @@
+"use client";
+
+import { Suspense, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
+import { orderBy } from "firebase/firestore";
 import { Plus, UserRound } from "lucide-react";
-import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useCollectionData } from "@/lib/firestore-hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -22,47 +27,47 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { STATUS_MEMBRO_OPTIONS, optionLabel, toSelectItems } from "@/lib/member-options";
+import type { CongregacaoInput } from "../congregacoes/actions";
+import type { CargoInput } from "../cargos/actions";
+import type { MembroInput } from "./actions";
 
 const STATUS_ITEMS = toSelectItems(STATUS_MEMBRO_OPTIONS);
-import type { Prisma } from "@/generated/prisma/client";
 
-export default async function MembrosPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string; congregacaoId?: string; cargoId?: string; status?: string }>;
-}) {
-  await requireUser();
-  const params = await searchParams;
+function MembrosContent() {
+  const params = useSearchParams();
+  const q = params.get("q") ?? "";
+  const congregacaoId = params.get("congregacaoId") ?? "";
+  const cargoId = params.get("cargoId") ?? "";
+  const status = params.get("status") ?? "";
 
-  const [congregacoes, cargos] = await Promise.all([
-    prisma.congregacao.findMany({ orderBy: { nome: "asc" } }),
-    prisma.cargo.findMany({ orderBy: { ordem: "asc" } }),
+  const { data: congregacoes } = useCollectionData<CongregacaoInput>("congregacoes", [
+    orderBy("nome", "asc"),
+  ]);
+  const { data: cargos } = useCollectionData<CargoInput>("cargos", [orderBy("ordem", "asc")]);
+  const { data: membros, loading } = useCollectionData<MembroInput>("membros", [
+    orderBy("nomeCompleto", "asc"),
   ]);
 
-  const where: Prisma.MembroWhereInput = {};
-  if (params.q) {
-    where.OR = [
-      { nomeCompleto: { contains: params.q } },
-      { cpf: { contains: params.q } },
-    ];
-  }
-  if (params.congregacaoId) where.congregacaoId = Number(params.congregacaoId);
-  if (params.cargoId) where.cargoId = Number(params.cargoId);
-  if (params.status) where.status = params.status;
-
-  const membros = await prisma.membro.findMany({
-    where,
-    orderBy: { nomeCompleto: "asc" },
-    include: { congregacao: true, cargo: true },
-    take: 200,
-  });
+  const filtrados = useMemo(() => {
+    return membros.filter((m) => {
+      if (congregacaoId && m.congregacaoId !== congregacaoId) return false;
+      if (cargoId && m.cargoId !== cargoId) return false;
+      if (status && m.status !== status) return false;
+      if (q) {
+        const termo = q.toLowerCase();
+        const alvo = `${m.nomeCompleto} ${m.cpf ?? ""}`.toLowerCase();
+        if (!alvo.includes(termo)) return false;
+      }
+      return true;
+    });
+  }, [membros, congregacaoId, cargoId, status, q]);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Membros</h1>
-          <p className="text-muted-foreground">{membros.length} membro(s) encontrado(s).</p>
+          <p className="text-muted-foreground">{filtrados.length} membro(s) encontrado(s).</p>
         </div>
         <Button nativeButton={false} render={<Link href="/membros/novo" />}>
           <Plus className="size-4" />
@@ -74,20 +79,20 @@ export default async function MembrosPage({
         <Input
           name="q"
           placeholder="Buscar por nome ou CPF..."
-          defaultValue={params.q}
+          defaultValue={q}
           className="max-w-xs"
         />
         <Select
           name="congregacaoId"
-          items={Object.fromEntries(congregacoes.map((c) => [String(c.id), c.nome]))}
-          defaultValue={params.congregacaoId}
+          items={Object.fromEntries(congregacoes.map((c) => [c.id, c.nome]))}
+          defaultValue={congregacaoId || undefined}
         >
           <SelectTrigger className="w-48">
             <SelectValue placeholder="Congregação" />
           </SelectTrigger>
           <SelectContent>
             {congregacoes.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)}>
+              <SelectItem key={c.id} value={c.id}>
                 {c.nome}
               </SelectItem>
             ))}
@@ -95,21 +100,21 @@ export default async function MembrosPage({
         </Select>
         <Select
           name="cargoId"
-          items={Object.fromEntries(cargos.map((c) => [String(c.id), c.nome]))}
-          defaultValue={params.cargoId}
+          items={Object.fromEntries(cargos.map((c) => [c.id, c.nome]))}
+          defaultValue={cargoId || undefined}
         >
           <SelectTrigger className="w-40">
             <SelectValue placeholder="Cargo" />
           </SelectTrigger>
           <SelectContent>
             {cargos.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)}>
+              <SelectItem key={c.id} value={c.id}>
                 {c.nome}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Select name="status" items={STATUS_ITEMS} defaultValue={params.status}>
+        <Select name="status" items={STATUS_ITEMS} defaultValue={status || undefined}>
           <SelectTrigger className="w-36">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -124,7 +129,7 @@ export default async function MembrosPage({
         <Button type="submit" variant="secondary">
           Filtrar
         </Button>
-        {(params.q || params.congregacaoId || params.cargoId || params.status) && (
+        {(q || congregacaoId || cargoId || status) && (
           <Button variant="ghost" nativeButton={false} render={<Link href="/membros" />}>
             Limpar
           </Button>
@@ -142,16 +147,17 @@ export default async function MembrosPage({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {membros.map((m) => (
+            {filtrados.map((m) => (
               <TableRow key={m.id} className="cursor-pointer">
                 <TableCell>
-                  <Link href={`/membros/${m.id}`} className="flex items-center gap-3">
+                  <Link href={`/membros/editar?id=${m.id}`} className="flex items-center gap-3">
                     {m.fotoUrl ? (
                       <Image
                         src={m.fotoUrl}
                         alt={m.nomeCompleto}
                         width={32}
                         height={32}
+                        unoptimized
                         className="size-8 rounded-full object-cover"
                       />
                     ) : (
@@ -162,8 +168,8 @@ export default async function MembrosPage({
                     <span className="font-medium">{m.nomeCompleto}</span>
                   </Link>
                 </TableCell>
-                <TableCell>{m.congregacao.nome}</TableCell>
-                <TableCell>{m.cargo?.nome ?? "—"}</TableCell>
+                <TableCell>{m.congregacaoNome ?? "—"}</TableCell>
+                <TableCell>{m.cargoNome ?? "—"}</TableCell>
                 <TableCell>
                   <Badge variant={m.status === "ATIVO" ? "secondary" : "outline"}>
                     {optionLabel(STATUS_MEMBRO_OPTIONS, m.status)}
@@ -171,7 +177,7 @@ export default async function MembrosPage({
                 </TableCell>
               </TableRow>
             ))}
-            {membros.length === 0 && (
+            {!loading && filtrados.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="text-center text-muted-foreground">
                   Nenhum membro encontrado.
@@ -182,5 +188,15 @@ export default async function MembrosPage({
         </Table>
       </div>
     </div>
+  );
+}
+
+export default function MembrosPage() {
+  return (
+    <AuthGuard>
+      <Suspense fallback={<p className="text-muted-foreground">Carregando...</p>}>
+        <MembrosContent />
+      </Suspense>
+    </AuthGuard>
   );
 }

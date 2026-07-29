@@ -1,97 +1,89 @@
-"use server";
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  serverTimestamp,
+  query,
+  where,
+  limit,
+  getDocs,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { toTimestamp } from "@/lib/firestore-utils";
 
-import { z } from "zod";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+export type CongregacaoInput = {
+  nome: string;
+  matriz: boolean;
+  endereco?: string;
+  cidade?: string;
+  uf?: string;
+  telefone?: string;
+  pastorResponsavel?: string;
+  dataFundacao?: string;
+};
 
-const congregacaoSchema = z.object({
-  nome: z.string().min(2, "Informe o nome da congregação."),
-  matriz: z.boolean(),
-  endereco: z.string().optional(),
-  cidade: z.string().optional(),
-  uf: z.string().optional(),
-  telefone: z.string().optional(),
-  pastorResponsavel: z.string().optional(),
-  dataFundacao: z.string().optional(),
-});
-
-export type CongregacaoFormState = { error?: string };
-
-function parseForm(formData: FormData) {
-  return congregacaoSchema.safeParse({
-    nome: formData.get("nome"),
+function parseForm(formData: FormData): CongregacaoInput {
+  return {
+    nome: String(formData.get("nome") ?? ""),
     matriz: formData.get("matriz") === "on",
-    endereco: formData.get("endereco") || undefined,
-    cidade: formData.get("cidade") || undefined,
-    uf: formData.get("uf") || undefined,
-    telefone: formData.get("telefone") || undefined,
-    pastorResponsavel: formData.get("pastorResponsavel") || undefined,
-    dataFundacao: formData.get("dataFundacao") || undefined,
-  });
+    endereco: String(formData.get("endereco") ?? "") || undefined,
+    cidade: String(formData.get("cidade") ?? "") || undefined,
+    uf: String(formData.get("uf") ?? "") || undefined,
+    telefone: String(formData.get("telefone") ?? "") || undefined,
+    pastorResponsavel: String(formData.get("pastorResponsavel") ?? "") || undefined,
+    dataFundacao: String(formData.get("dataFundacao") ?? "") || undefined,
+  };
 }
 
-export async function createCongregacao(
-  _prevState: CongregacaoFormState,
-  formData: FormData,
-): Promise<CongregacaoFormState> {
-  await requireRole(["ADMIN"]);
-
-  const parsed = parseForm(formData);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+export async function createCongregacao(formData: FormData) {
+  const input = parseForm(formData);
+  if (!input.nome || input.nome.length < 2) {
+    throw new Error("Informe o nome da congregação.");
   }
 
-  await prisma.congregacao.create({
-    data: {
-      ...parsed.data,
-      dataFundacao: parsed.data.dataFundacao
-        ? new Date(parsed.data.dataFundacao)
-        : undefined,
-    },
+  const docRef = await addDoc(collection(db, "congregacoes"), {
+    nome: input.nome,
+    matriz: input.matriz,
+    endereco: input.endereco ?? null,
+    cidade: input.cidade ?? null,
+    uf: input.uf ?? null,
+    telefone: input.telefone ?? null,
+    pastorResponsavel: input.pastorResponsavel ?? null,
+    dataFundacao: toTimestamp(input.dataFundacao),
+    createdAt: serverTimestamp(),
   });
-
-  revalidatePath("/congregacoes");
-  redirect("/congregacoes");
+  return docRef.id;
 }
 
-export async function updateCongregacao(
-  id: number,
-  _prevState: CongregacaoFormState,
-  formData: FormData,
-): Promise<CongregacaoFormState> {
-  await requireRole(["ADMIN"]);
-
-  const parsed = parseForm(formData);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+export async function updateCongregacao(id: string, formData: FormData) {
+  const input = parseForm(formData);
+  if (!input.nome || input.nome.length < 2) {
+    throw new Error("Informe o nome da congregação.");
   }
 
-  await prisma.congregacao.update({
-    where: { id },
-    data: {
-      ...parsed.data,
-      dataFundacao: parsed.data.dataFundacao
-        ? new Date(parsed.data.dataFundacao)
-        : null,
-    },
+  await updateDoc(doc(db, "congregacoes", id), {
+    nome: input.nome,
+    matriz: input.matriz,
+    endereco: input.endereco ?? null,
+    cidade: input.cidade ?? null,
+    uf: input.uf ?? null,
+    telefone: input.telefone ?? null,
+    pastorResponsavel: input.pastorResponsavel ?? null,
+    dataFundacao: toTimestamp(input.dataFundacao),
   });
-
-  revalidatePath("/congregacoes");
-  redirect("/congregacoes");
 }
 
-export async function deleteCongregacao(id: number) {
-  await requireRole(["ADMIN"]);
-
-  try {
-    await prisma.congregacao.delete({ where: { id } });
-  } catch {
+export async function deleteCongregacao(id: string) {
+  const vinculados = await getDocs(
+    query(collection(db, "membros"), where("congregacaoId", "==", id), limit(1)),
+  );
+  if (!vinculados.empty) {
     throw new Error(
-      "Não é possível excluir esta congregação: existem membros ou registros vinculados a ela.",
+      "Não é possível excluir esta congregação: existem membros vinculados a ela.",
     );
   }
 
-  revalidatePath("/congregacoes");
+  await deleteDoc(doc(db, "congregacoes", id));
 }

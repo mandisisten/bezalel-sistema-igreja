@@ -1,58 +1,53 @@
-"use server";
+import { collection, addDoc, deleteDoc, doc, getDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
-import { z } from "zod";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+export type CartaMudancaInput = {
+  membroId: string;
+  membroNome?: string | null;
+  congregacaoDestinoId: string | null;
+  congregacaoDestinoNome?: string | null;
+  igrejaDestinoTexto: string | null;
+  data: Timestamp;
+  motivo: string | null;
+  observacoes: string | null;
+};
 
-const cartaSchema = z.object({
-  membroId: z.coerce.number().int("Selecione o membro."),
-  congregacaoOrigemId: z.coerce.number().int().optional(),
-  congregacaoDestinoId: z.coerce.number().int().optional(),
-  igrejaDestinoTexto: z.string().optional(),
-  motivo: z.string().optional(),
-  observacoes: z.string().optional(),
-});
+async function parseForm(formData: FormData): Promise<CartaMudancaInput> {
+  const membroId = String(formData.get("membroId") ?? "");
+  if (!membroId) throw new Error("Selecione o membro.");
+  const congregacaoDestinoId = String(formData.get("congregacaoDestinoId") ?? "") || null;
+  const igrejaDestinoTexto = String(formData.get("igrejaDestinoTexto") ?? "") || null;
 
-export type CartaMudancaFormState = { error?: string };
-
-export async function createCartaMudanca(
-  _prevState: CartaMudancaFormState,
-  formData: FormData,
-): Promise<CartaMudancaFormState> {
-  await requireRole(["ADMIN", "SECRETARIA", "LIDERANCA"]);
-
-  const parsed = cartaSchema.safeParse({
-    membroId: formData.get("membroId"),
-    congregacaoOrigemId: formData.get("congregacaoOrigemId") || undefined,
-    congregacaoDestinoId: formData.get("congregacaoDestinoId") || undefined,
-    igrejaDestinoTexto: formData.get("igrejaDestinoTexto") || undefined,
-    motivo: formData.get("motivo") || undefined,
-    observacoes: formData.get("observacoes") || undefined,
-  });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  if (!congregacaoDestinoId && !igrejaDestinoTexto) {
+    throw new Error("Informe a congregação de destino ou o nome da igreja de destino.");
   }
 
-  if (!parsed.data.congregacaoDestinoId && !parsed.data.igrejaDestinoTexto) {
-    return { error: "Informe a congregação de destino ou o nome da igreja de destino." };
-  }
+  const [membroSnap, congregacaoSnap] = await Promise.all([
+    getDoc(doc(db, "membros", membroId)),
+    congregacaoDestinoId ? getDoc(doc(db, "congregacoes", congregacaoDestinoId)) : Promise.resolve(null),
+  ]);
 
-  await prisma.cartaMudanca.create({ data: parsed.data });
-
-  revalidatePath("/cartas/mudanca");
-  redirect("/cartas/mudanca");
+  return {
+    membroId,
+    membroNome: membroSnap.exists() ? (membroSnap.data().nomeCompleto as string) : null,
+    congregacaoDestinoId,
+    congregacaoDestinoNome: congregacaoSnap?.exists() ? (congregacaoSnap.data().nome as string) : null,
+    igrejaDestinoTexto,
+    data: Timestamp.now(),
+    motivo: String(formData.get("motivo") ?? "") || null,
+    observacoes: String(formData.get("observacoes") ?? "") || null,
+  };
 }
 
-export async function deleteCartaMudanca(id: number) {
-  await requireRole(["ADMIN"]);
+export async function createCartaMudanca(formData: FormData): Promise<string> {
+  const input = await parseForm(formData);
+  const docRef = await addDoc(collection(db, "cartasMudanca"), {
+    ...input,
+    createdAt: serverTimestamp(),
+  });
+  return docRef.id;
+}
 
-  try {
-    await prisma.cartaMudanca.delete({ where: { id } });
-  } catch {
-    throw new Error("Não é possível excluir: existem documentos vinculados a este registro.");
-  }
-
-  revalidatePath("/cartas/mudanca");
+export async function deleteCartaMudanca(id: string) {
+  await deleteDoc(doc(db, "cartasMudanca", id));
 }

@@ -1,93 +1,68 @@
-"use server";
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { toDateTimeTimestamp } from "@/lib/firestore-utils";
 
-import { z } from "zod";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+export type EventoInput = {
+  titulo: string;
+  descricao: string | null;
+  inicio: Timestamp;
+  fim: Timestamp;
+  local: string | null;
+  tipo: string | null;
+  congregacaoId: string | null;
+  congregacaoNome?: string | null;
+  responsavelId: string | null;
+  responsavelNome?: string | null;
+  recorrencia: string | null;
+};
 
-const eventoSchema = z.object({
-  titulo: z.string().min(2, "Informe o título do evento."),
-  descricao: z.string().optional(),
-  inicio: z.string().min(1, "Informe o início."),
-  fim: z.string().min(1, "Informe o fim."),
-  local: z.string().optional(),
-  tipo: z.string().optional(),
-  congregacaoId: z.coerce.number().int().optional(),
-  responsavelId: z.coerce.number().int().optional(),
-  recorrencia: z.string().optional(),
-});
+async function parseForm(formData: FormData): Promise<EventoInput> {
+  const titulo = String(formData.get("titulo") ?? "");
+  if (!titulo || titulo.length < 2) throw new Error("Informe o título do evento.");
+  const inicioStr = String(formData.get("inicio") ?? "");
+  const fimStr = String(formData.get("fim") ?? "");
+  if (!inicioStr) throw new Error("Informe o início.");
+  if (!fimStr) throw new Error("Informe o fim.");
 
-export type EventoFormState = { error?: string };
+  const inicio = toDateTimeTimestamp(inicioStr)!;
+  const fim = toDateTimeTimestamp(fimStr)!;
+  if (fim.toMillis() < inicio.toMillis()) {
+    throw new Error("A data de término não pode ser anterior ao início.");
+  }
 
-function parseForm(formData: FormData) {
-  return eventoSchema.safeParse({
-    titulo: formData.get("titulo"),
-    descricao: formData.get("descricao") || undefined,
-    inicio: formData.get("inicio"),
-    fim: formData.get("fim"),
-    local: formData.get("local") || undefined,
-    tipo: formData.get("tipo") || undefined,
-    congregacaoId: formData.get("congregacaoId") || undefined,
-    responsavelId: formData.get("responsavelId") || undefined,
-    recorrencia: formData.get("recorrencia") || undefined,
-  });
+  const congregacaoId = String(formData.get("congregacaoId") ?? "") || null;
+  const responsavelId = String(formData.get("responsavelId") ?? "") || null;
+
+  const [congregacaoSnap, responsavelSnap] = await Promise.all([
+    congregacaoId ? getDoc(doc(db, "congregacoes", congregacaoId)) : Promise.resolve(null),
+    responsavelId ? getDoc(doc(db, "membros", responsavelId)) : Promise.resolve(null),
+  ]);
+
+  return {
+    titulo,
+    descricao: String(formData.get("descricao") ?? "") || null,
+    inicio,
+    fim,
+    local: String(formData.get("local") ?? "") || null,
+    tipo: String(formData.get("tipo") ?? "") || null,
+    congregacaoId,
+    congregacaoNome: congregacaoSnap?.exists() ? (congregacaoSnap.data().nome as string) : null,
+    responsavelId,
+    responsavelNome: responsavelSnap?.exists() ? (responsavelSnap.data().nomeCompleto as string) : null,
+    recorrencia: String(formData.get("recorrencia") ?? "") || "NENHUMA",
+  };
 }
 
-export async function createEvento(
-  _prevState: EventoFormState,
-  formData: FormData,
-): Promise<EventoFormState> {
-  await requireRole(["ADMIN", "SECRETARIA", "LIDERANCA"]);
-
-  const parsed = parseForm(formData);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  }
-
-  const inicio = new Date(parsed.data.inicio);
-  const fim = new Date(parsed.data.fim);
-  if (fim < inicio) {
-    return { error: "A data de término não pode ser anterior ao início." };
-  }
-
-  await prisma.eventoAgenda.create({
-    data: { ...parsed.data, inicio, fim },
-  });
-
-  revalidatePath("/agenda");
-  redirect("/agenda");
+export async function createEvento(formData: FormData) {
+  const input = await parseForm(formData);
+  await addDoc(collection(db, "eventos"), { ...input, createdAt: serverTimestamp() });
 }
 
-export async function updateEvento(
-  id: number,
-  _prevState: EventoFormState,
-  formData: FormData,
-): Promise<EventoFormState> {
-  await requireRole(["ADMIN", "SECRETARIA", "LIDERANCA"]);
-
-  const parsed = parseForm(formData);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  }
-
-  const inicio = new Date(parsed.data.inicio);
-  const fim = new Date(parsed.data.fim);
-  if (fim < inicio) {
-    return { error: "A data de término não pode ser anterior ao início." };
-  }
-
-  await prisma.eventoAgenda.update({
-    where: { id },
-    data: { ...parsed.data, inicio, fim },
-  });
-
-  revalidatePath("/agenda");
-  redirect("/agenda");
+export async function updateEvento(id: string, formData: FormData) {
+  const input = await parseForm(formData);
+  await updateDoc(doc(db, "eventos", id), { ...input });
 }
 
-export async function deleteEvento(id: number) {
-  await requireRole(["ADMIN", "SECRETARIA", "LIDERANCA"]);
-  await prisma.eventoAgenda.delete({ where: { id } });
-  revalidatePath("/agenda");
+export async function deleteEvento(id: string) {
+  await deleteDoc(doc(db, "eventos", id));
 }

@@ -1,13 +1,17 @@
-import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+"use client";
+
+import { orderBy } from "firebase/firestore";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useCollectionData } from "@/lib/firestore-hooks";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserForm } from "../user-form";
-import { createUser } from "../actions";
+import { createUsuario } from "../actions";
+import type { CongregacaoInput } from "../../../congregacoes/actions";
 
-export default async function NovoUsuarioPage() {
-  await requireRole(["ADMIN"]);
-
-  const congregacoes = await prisma.congregacao.findMany({ orderBy: { nome: "asc" } });
+function NovoUsuarioContent() {
+  const { data: congregacoes } = useCollectionData<CongregacaoInput>("congregacoes", [
+    orderBy("nome", "asc"),
+  ]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -17,9 +21,17 @@ export default async function NovoUsuarioPage() {
           <CardTitle>Dados de acesso</CardTitle>
         </CardHeader>
         <CardContent>
-          <UserForm action={createUser} congregacoes={congregacoes} mode="create" />
+          <UserForm action={createUsuario} congregacoes={congregacoes} mode="create" />
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function NovoUsuarioPage() {
+  return (
+    <AuthGuard roles={["ADMIN"]}>
+      <NovoUsuarioContent />
+    </AuthGuard>
   );
 }

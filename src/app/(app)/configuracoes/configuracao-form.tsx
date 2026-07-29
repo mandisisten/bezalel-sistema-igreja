@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { toast } from "sonner";
 import { Building2 } from "lucide-react";
@@ -15,7 +15,7 @@ import {
   FieldSeparator,
   FieldLegend,
 } from "@/components/ui/field";
-import { updateConfiguracao, type ConfiguracaoFormState } from "./actions";
+import { updateConfiguracao } from "./actions";
 
 export function ConfiguracaoForm({
   defaultValues,
@@ -30,18 +30,25 @@ export function ConfiguracaoForm({
     cargoPresidente: string | null;
   };
 }) {
-  const [state, formAction, isPending] = useActionState<ConfiguracaoFormState, FormData>(
-    updateConfiguracao,
-    {},
-  );
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
   const [preview, setPreview] = useState<string | null>(defaultValues.logoUrl);
 
-  useEffect(() => {
-    if (state.success) toast.success("Configurações salvas.");
-  }, [state.success]);
+  async function handleSubmit(formData: FormData) {
+    setError(null);
+    setIsPending(true);
+    try {
+      await updateConfiguracao(formData, defaultValues.logoUrl);
+      toast.success("Configurações salvas.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao salvar.");
+    } finally {
+      setIsPending(false);
+    }
+  }
 
   return (
-    <form action={formAction}>
+    <form action={handleSubmit}>
       <FieldSet>
         <FieldGroup>
           <FieldLegend>Logo</FieldLegend>
@@ -121,7 +128,7 @@ export function ConfiguracaoForm({
             </Field>
           </FieldGroup>
 
-          {state.error && <FieldError>{state.error}</FieldError>}
+          {error && <FieldError>{error}</FieldError>}
 
           <div>
             <Button type="submit" disabled={isPending}>

@@ -1,81 +1,52 @@
-"use server";
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { toTimestamp } from "@/lib/firestore-utils";
 
-import { z } from "zod";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+export type BatismoInput = {
+  membroId: string;
+  membroNome?: string | null;
+  data: Timestamp;
+  local: string | null;
+  oficiante: string | null;
+  testemunhas: string | null;
+  congregacaoId: string | null;
+  congregacaoNome?: string | null;
+};
 
-const batismoSchema = z.object({
-  membroId: z.coerce.number().int("Selecione o membro."),
-  data: z.string().min(1, "Informe a data."),
-  local: z.string().optional(),
-  oficiante: z.string().optional(),
-  testemunhas: z.string().optional(),
-  congregacaoId: z.coerce.number().int().optional(),
-});
+async function parseForm(formData: FormData): Promise<BatismoInput> {
+  const membroId = String(formData.get("membroId") ?? "");
+  if (!membroId) throw new Error("Selecione o membro.");
+  const data = String(formData.get("data") ?? "");
+  if (!data) throw new Error("Informe a data.");
+  const congregacaoId = String(formData.get("congregacaoId") ?? "") || null;
 
-export type BatismoFormState = { error?: string };
+  const [membroSnap, congregacaoSnap] = await Promise.all([
+    getDoc(doc(db, "membros", membroId)),
+    congregacaoId ? getDoc(doc(db, "congregacoes", congregacaoId)) : Promise.resolve(null),
+  ]);
 
-function parseForm(formData: FormData) {
-  return batismoSchema.safeParse({
-    membroId: formData.get("membroId"),
-    data: formData.get("data"),
-    local: formData.get("local") || undefined,
-    oficiante: formData.get("oficiante") || undefined,
-    testemunhas: formData.get("testemunhas") || undefined,
-    congregacaoId: formData.get("congregacaoId") || undefined,
-  });
+  return {
+    membroId,
+    membroNome: membroSnap.exists() ? (membroSnap.data().nomeCompleto as string) : null,
+    data: toTimestamp(data)!,
+    local: String(formData.get("local") ?? "") || null,
+    oficiante: String(formData.get("oficiante") ?? "") || null,
+    testemunhas: String(formData.get("testemunhas") ?? "") || null,
+    congregacaoId,
+    congregacaoNome: congregacaoSnap?.exists() ? (congregacaoSnap.data().nome as string) : null,
+  };
 }
 
-export async function createBatismo(
-  _prevState: BatismoFormState,
-  formData: FormData,
-): Promise<BatismoFormState> {
-  await requireRole(["ADMIN", "SECRETARIA"]);
-
-  const parsed = parseForm(formData);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  }
-
-  await prisma.batismo.create({
-    data: { ...parsed.data, data: new Date(parsed.data.data) },
-  });
-
-  revalidatePath("/batismos");
-  redirect("/batismos");
+export async function createBatismo(formData: FormData) {
+  const input = await parseForm(formData);
+  await addDoc(collection(db, "batismos"), { ...input, createdAt: serverTimestamp() });
 }
 
-export async function updateBatismo(
-  id: number,
-  _prevState: BatismoFormState,
-  formData: FormData,
-): Promise<BatismoFormState> {
-  await requireRole(["ADMIN", "SECRETARIA"]);
-
-  const parsed = parseForm(formData);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  }
-
-  await prisma.batismo.update({
-    where: { id },
-    data: { ...parsed.data, data: new Date(parsed.data.data) },
-  });
-
-  revalidatePath("/batismos");
-  redirect("/batismos");
+export async function updateBatismo(id: string, formData: FormData) {
+  const input = await parseForm(formData);
+  await updateDoc(doc(db, "batismos", id), { ...input });
 }
 
-export async function deleteBatismo(id: number) {
-  await requireRole(["ADMIN"]);
-
-  try {
-    await prisma.batismo.delete({ where: { id } });
-  } catch {
-    throw new Error("Não é possível excluir: existem documentos vinculados a este registro.");
-  }
-
-  revalidatePath("/batismos");
+export async function deleteBatismo(id: string) {
+  await deleteDoc(doc(db, "batismos", id));
 }

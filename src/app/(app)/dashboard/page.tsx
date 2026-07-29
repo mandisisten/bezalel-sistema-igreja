@@ -1,31 +1,25 @@
+"use client";
+
+import { useMemo } from "react";
 import Link from "next/link";
-import { Users, Building2, Cake, Droplets, UserPlus, CalendarClock } from "lucide-react";
-import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { orderBy, where } from "firebase/firestore";
+import { Users, Building2, Cake, UserPlus } from "lucide-react";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useAuth } from "@/lib/firebase-auth";
+import { useCollectionData } from "@/lib/firestore-hooks";
+import { formatTimestamp } from "@/lib/firestore-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarStat, GrowthChart } from "./charts";
+import type { CongregacaoInput } from "../congregacoes/actions";
+import type { CargoInput } from "../cargos/actions";
+import type { MembroInput } from "../membros/actions";
 
-const MESES = [
-  "jan",
-  "fev",
-  "mar",
-  "abr",
-  "mai",
-  "jun",
-  "jul",
-  "ago",
-  "set",
-  "out",
-  "nov",
-  "dez",
-];
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 const STAT_COLORS = {
   blue: "bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400",
   violet: "bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400",
   amber: "bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400",
-  sky: "bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400",
   emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400",
 } as const;
 
@@ -57,95 +51,82 @@ function StatCard({
   );
 }
 
-export default async function DashboardPage() {
-  const session = await requireUser();
+function DashboardContent() {
+  const { profile } = useAuth();
+  const { data: membrosAtivos } = useCollectionData<MembroInput>("membros", [
+    where("status", "==", "ATIVO"),
+  ]);
+  const { data: congregacoes } = useCollectionData<CongregacaoInput>("congregacoes", [
+    orderBy("nome", "asc"),
+  ]);
+  const { data: cargos } = useCollectionData<CargoInput>("cargos", [orderBy("ordem", "asc")]);
+  const { data: todosMembros } = useCollectionData<
+    MembroInput & { createdAt?: import("firebase/firestore").Timestamp }
+  >("membros", []);
 
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
-  const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
 
-  const [
-    totalAtivos,
-    totalCongregacoes,
-    batismosEsteAno,
-    novosMembrosEsteMes,
-    membrosPorCargo,
-    membrosPorCongregacao,
-    membrosParaAniversario,
-    membrosParaCrescimento,
-    proximosEventos,
-  ] = await Promise.all([
-    prisma.membro.count({ where: { status: "ATIVO" } }),
-    prisma.congregacao.count(),
-    prisma.batismo.count({ where: { data: { gte: startOfYear } } }),
-    prisma.membro.count({ where: { createdAt: { gte: startOfMonth } } }),
-    prisma.cargo.findMany({
-      orderBy: { ordem: "asc" },
-      include: { _count: { select: { membros: true } } },
-    }),
-    prisma.congregacao.findMany({
-      orderBy: { nome: "asc" },
-      include: { _count: { select: { membros: true } } },
-    }),
-    prisma.membro.findMany({
-      where: { dataNascimento: { not: null }, status: "ATIVO" },
-      select: { id: true, nomeCompleto: true, dataNascimento: true },
-    }),
-    prisma.membro.findMany({
-      where: { createdAt: { gte: twelveMonthsAgo } },
-      select: { createdAt: true },
-    }),
-    prisma.eventoAgenda.findMany({
-      where: { inicio: { gte: now } },
-      orderBy: { inicio: "asc" },
-      take: 5,
-    }),
-  ]);
+  const aniversariantes = useMemo(() => {
+    return membrosAtivos
+      .filter((m) => m.dataNascimento && m.dataNascimento.toDate().getUTCMonth() === now.getMonth())
+      .sort(
+        (a, b) => a.dataNascimento!.toDate().getUTCDate() - b.dataNascimento!.toDate().getUTCDate(),
+      );
+  }, [membrosAtivos, now]);
 
-  const aniversariantes = membrosParaAniversario
-    .filter((m) => m.dataNascimento!.getUTCMonth() === now.getMonth())
-    .sort((a, b) => a.dataNascimento!.getUTCDate() - b.dataNascimento!.getUTCDate());
+  const novosMembrosEsteMes = useMemo(() => {
+    const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1);
+    return todosMembros.filter((m) => m.createdAt && m.createdAt.toDate() >= inicioMes).length;
+  }, [todosMembros, now]);
 
-  const cargoData = membrosPorCargo.map((c) => ({ label: c.nome, total: c._count.membros }));
-  const congregacaoData = membrosPorCongregacao.map((c) => ({
-    label: c.nome,
-    total: c._count.membros,
-  }));
+  const cargoData = useMemo(() => {
+    return cargos.map((cargo) => ({
+      label: cargo.nome,
+      total: todosMembros.filter((m) => m.cargoId === cargo.id).length,
+    }));
+  }, [cargos, todosMembros]);
 
-  const crescimentoBuckets = new Map<string, number>();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
-    crescimentoBuckets.set(`${d.getFullYear()}-${d.getMonth()}`, 0);
-  }
-  for (const m of membrosParaCrescimento) {
-    const key = `${m.createdAt.getFullYear()}-${m.createdAt.getMonth()}`;
-    if (crescimentoBuckets.has(key)) {
-      crescimentoBuckets.set(key, (crescimentoBuckets.get(key) ?? 0) + 1);
+  const congregacaoData = useMemo(() => {
+    return congregacoes.map((c) => ({
+      label: c.nome,
+      total: todosMembros.filter((m) => m.congregacaoId === c.id).length,
+    }));
+  }, [congregacoes, todosMembros]);
+
+  const crescimentoData = useMemo(() => {
+    const buckets = new Map<string, number>();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
+      buckets.set(`${d.getFullYear()}-${d.getMonth()}`, 0);
     }
-  }
-  const crescimentoData = Array.from(crescimentoBuckets.entries()).map(([key, total]) => {
-    const [, month] = key.split("-");
-    return { label: MESES[Number(month)], total };
-  });
+    for (const m of todosMembros) {
+      if (!m.createdAt) continue;
+      const d = m.createdAt.toDate();
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      if (buckets.has(key)) buckets.set(key, (buckets.get(key) ?? 0) + 1);
+    }
+    return Array.from(buckets.entries()).map(([key, total]) => {
+      const [, month] = key.split("-");
+      return { label: MESES[Number(month)], total };
+    });
+  }, [todosMembros, now]);
 
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="text-muted-foreground">Bem-vindo(a), {session.nome}.</p>
+        <p className="text-muted-foreground">Bem-vindo(a), {profile?.nome}.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard icon={Users} label="Membros ativos" value={totalAtivos} color="blue" />
-        <StatCard icon={Building2} label="Congregações" value={totalCongregacoes} color="violet" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard icon={Users} label="Membros ativos" value={membrosAtivos.length} color="blue" />
+        <StatCard icon={Building2} label="Congregações" value={congregacoes.length} color="violet" />
         <StatCard
           icon={Cake}
           label="Aniversariantes no mês"
           value={aniversariantes.length}
           color="amber"
         />
-        <StatCard icon={Droplets} label="Batismos este ano" value={batismosEsteAno} color="sky" />
         <StatCard
           icon={UserPlus}
           label="Novos membros este mês"
@@ -162,53 +143,35 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <CalendarClock className="size-4" />
-              Próximos eventos
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {proximosEventos.length === 0 && (
-              <p className="text-sm text-muted-foreground">Nenhum evento futuro agendado.</p>
-            )}
-            {proximosEventos.map((e) => (
-              <Link
-                key={e.id}
-                href={`/agenda/${e.id}`}
-                className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted"
-              >
-                <span className="font-medium">{e.titulo}</span>
-                <span className="text-muted-foreground">{formatDateTime(e.inicio)}</span>
-              </Link>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
               <Cake className="size-4" />
               Aniversariantes do mês
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             {aniversariantes.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                Nenhum aniversariante este mês.
-              </p>
+              <p className="text-sm text-muted-foreground">Nenhum aniversariante este mês.</p>
             )}
             {aniversariantes.map((m) => (
               <Link
                 key={m.id}
-                href={`/membros/${m.id}`}
+                href={`/membros/editar?id=${m.id}`}
                 className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted"
               >
                 <span className="font-medium">{m.nomeCompleto}</span>
-                <span className="text-muted-foreground">{formatDate(m.dataNascimento)}</span>
+                <span className="text-muted-foreground">{formatTimestamp(m.dataNascimento)}</span>
               </Link>
             ))}
           </CardContent>
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <AuthGuard>
+      <DashboardContent />
+    </AuthGuard>
   );
 }

@@ -1,7 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import { Plus, Pencil, ArrowLeft } from "lucide-react";
-import { prisma } from "@/lib/prisma";
-import { requireRole, ROLE_LABELS, type Role } from "@/lib/auth";
+import { orderBy } from "firebase/firestore";
+import { AuthGuard } from "@/components/layout/auth-guard";
+import { useCollectionData } from "@/lib/firestore-hooks";
+import { ROLE_LABELS, type Role } from "@/lib/roles";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,14 +16,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { UsuarioInput } from "./actions";
 
-export default async function UsuariosPage() {
-  await requireRole(["ADMIN"]);
-
-  const usuarios = await prisma.user.findMany({
-    orderBy: { nome: "asc" },
-    include: { congregacao: true },
-  });
+function UsuariosContent() {
+  const { data: usuarios } = useCollectionData<UsuarioInput>("usuarios", [orderBy("nome", "asc")]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -63,7 +63,7 @@ export default async function UsuariosPage() {
                 <TableCell className="font-medium">{u.nome}</TableCell>
                 <TableCell>{u.email}</TableCell>
                 <TableCell>{ROLE_LABELS[u.role as Role]}</TableCell>
-                <TableCell>{u.congregacao?.nome ?? "—"}</TableCell>
+                <TableCell>{u.congregacaoNome ?? "—"}</TableCell>
                 <TableCell>
                   <Badge variant={u.ativo ? "secondary" : "outline"}>
                     {u.ativo ? "Ativo" : "Inativo"}
@@ -76,7 +76,7 @@ export default async function UsuariosPage() {
                       size="icon-sm"
                       aria-label="Editar"
                       nativeButton={false}
-                      render={<Link href={`/configuracoes/usuarios/${u.id}`} />}
+                      render={<Link href={`/configuracoes/usuarios/editar?id=${u.id}`} />}
                     >
                       <Pencil className="size-4" />
                     </Button>
@@ -88,5 +88,13 @@ export default async function UsuariosPage() {
         </Table>
       </div>
     </div>
+  );
+}
+
+export default function UsuariosPage() {
+  return (
+    <AuthGuard roles={["ADMIN"]}>
+      <UsuariosContent />
+    </AuthGuard>
   );
 }
