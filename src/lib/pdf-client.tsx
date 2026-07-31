@@ -96,7 +96,6 @@ export async function gerarCertificadoBatismo(
 
   const blob = await pdf(
     <CertificadoBatismo
-      nomeIgreja={configuracao.nomeIgreja}
       logoPath={configuracao.logoUrl}
       nomeMembro={batismo.membroNome ?? "—"}
       data={formatDate(batismo.data.toDate())}

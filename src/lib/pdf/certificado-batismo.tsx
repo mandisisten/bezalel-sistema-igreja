@@ -26,7 +26,7 @@ const s = StyleSheet.create({
     paddingTop: 16,
   },
   title: {
-    fontSize: 36,
+    fontSize: 33,
     fontFamily: "Times-Bold",
     letterSpacing: 1,
   },
@@ -44,9 +44,9 @@ const s = StyleSheet.create({
     marginTop: 10,
   },
   nomeMembro: {
-    fontSize: 24,
+    fontSize: 23,
     fontFamily: "Times-Bold",
-    marginTop: 10,
+    marginTop: 8,
     marginBottom: 10,
   },
   divider: {
@@ -54,38 +54,38 @@ const s = StyleSheet.create({
     borderTopColor: navy,
     width: "100%",
     marginTop: 2,
-    marginBottom: 12,
+    marginBottom: 13,
   },
   paragraph: {
-    fontSize: 12,
+    fontSize: 13,
     lineHeight: 1.5,
     textAlign: "center",
-    marginHorizontal: 60,
+    marginHorizontal: 55,
   },
   bold: {
     fontFamily: "Times-Bold",
   },
   quote: {
     fontFamily: "Times-Italic",
-    fontSize: 11,
-    lineHeight: 1.5,
+    fontSize: 12,
+    lineHeight: 1.4,
     textAlign: "center",
-    marginHorizontal: 60,
-    marginTop: 10,
+    marginHorizontal: 55,
+    marginTop: 14,
   },
   referencia: {
     fontFamily: "Times-Bold",
     fontSize: 9,
     letterSpacing: 1,
     color: gold,
-    marginTop: 5,
+    marginTop: 6,
   },
   footer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: "auto",
-    paddingTop: 8,
+    paddingTop: 10,
   },
   signatureBlock: {
     width: 180,
@@ -108,18 +108,11 @@ const s = StyleSheet.create({
   },
   churchBlock: {
     alignItems: "center",
-    gap: 2,
   },
   churchLogo: {
     width: 200,
     height: 200,
     objectFit: "contain",
-  },
-  churchName: {
-    fontFamily: "Times-Bold",
-    fontSize: 10,
-    letterSpacing: 1,
-    textAlign: "center",
   },
   docNumber: {
     position: "absolute",
@@ -159,7 +152,6 @@ function OrnamentDivider() {
 }
 
 export function CertificadoBatismo({
-  nomeIgreja,
   logoPath,
   nomeMembro,
   data,
@@ -171,7 +163,6 @@ export function CertificadoBatismo({
   cargoSecretario,
   numero,
 }: {
-  nomeIgreja: string;
   logoPath?: string | null;
   nomeMembro: string;
   data: string;
@@ -223,7 +214,6 @@ export function CertificadoBatismo({
 
             <View style={s.churchBlock}>
               {logoPath && <Image src={logoPath} style={s.churchLogo} />}
-              <Text style={s.churchName}>{nomeIgreja.toUpperCase()}</Text>
             </View>
 
             <View style={s.signatureBlock}>
