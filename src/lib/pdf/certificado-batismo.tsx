@@ -57,20 +57,22 @@ const s = StyleSheet.create({
     marginBottom: 13,
   },
   paragraph: {
+    width: "100%",
     fontSize: 13,
     lineHeight: 1.5,
     textAlign: "center",
-    marginHorizontal: 55,
+    paddingHorizontal: 55,
   },
   bold: {
     fontFamily: "Times-Bold",
   },
   quote: {
+    width: "100%",
     fontFamily: "Times-Italic",
     fontSize: 12,
     lineHeight: 1.4,
     textAlign: "center",
-    marginHorizontal: 55,
+    paddingHorizontal: 55,
     marginTop: 14,
   },
   referencia: {
