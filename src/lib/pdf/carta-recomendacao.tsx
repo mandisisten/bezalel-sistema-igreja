@@ -1,73 +1,92 @@
-import { Document, Page, Text, View, Image } from "@react-pdf/renderer";
-import { letterStyles as s } from "./styles";
+import { Document, Page, Text, View } from "@react-pdf/renderer";
+import { s, WaveBar, CartaHeader, CartaTipoBox, CartaFooter } from "./carta-eclesiastica";
 
 export function CartaRecomendacao({
   nomeIgreja,
   enderecoSede,
-  telefoneSede,
+  cidadeSede,
   logoPath,
   nomeMembro,
+  congregacaoOrigem,
+  membroDesde,
   tipo,
   destinatario,
   finalidade,
+  interna,
   data,
+  observacoes,
   nomePresidente,
   cargoPresidente,
+  nomeSecretario,
+  cargoSecretario,
   numero,
 }: {
   nomeIgreja: string;
   enderecoSede: string | null;
-  telefoneSede: string | null;
+  cidadeSede: string | null;
   logoPath?: string | null;
   nomeMembro: string;
+  congregacaoOrigem: string;
+  membroDesde: string;
   tipo: string;
   destinatario: string | null;
   finalidade: string | null;
+  interna: boolean;
   data: string;
+  observacoes: string | null;
   nomePresidente: string | null;
   cargoPresidente: string | null;
+  nomeSecretario: string | null;
+  cargoSecretario: string | null;
   numero: string;
 }) {
-  const papel = tipo === "OBREIRO" ? "obreiro(a)" : "membro";
+  const papel = tipo === "OBREIRO" ? "obreiro(a)" : "membro(a)";
 
   return (
     <Document>
       <Page size="A4" style={s.page}>
-        <View style={s.header}>
-          {logoPath && <Image src={logoPath} style={s.logo} />}
-          <View>
-            <Text style={s.churchName}>{nomeIgreja}</Text>
-            {enderecoSede && <Text style={s.churchDetail}>{enderecoSede}</Text>}
-            {telefoneSede && <Text style={s.churchDetail}>{telefoneSede}</Text>}
-          </View>
-        </View>
+        <WaveBar />
 
-        <Text style={s.title}>Carta de Recomendação</Text>
+        <View style={s.body}>
+          <CartaHeader
+            nomeIgreja={nomeIgreja}
+            enderecoSede={enderecoSede}
+            cidadeSede={cidadeSede}
+            logoPath={logoPath}
+          />
 
-        {destinatario && <Text style={s.paragraph}>A quem possa interessar — {destinatario},</Text>}
+          <CartaTipoBox
+            tipo="RECOMENDACAO"
+            interna={interna}
+            congregacaoOrigem={congregacaoOrigem}
+          />
 
-        <Text style={s.paragraph}>
-          Recomendamos {nomeMembro}, {papel} desta igreja, pessoa de conduta cristã e reputação
-          ilibada dentro desta comunidade de fé.
-          {finalidade ? ` A presente carta tem por finalidade: ${finalidade}.` : ""}
-        </Text>
+          <Text style={s.saudacao}>&ldquo;A Paz do Senhor Jesus&rdquo;</Text>
 
-        <Text style={s.paragraph}>
-          Colocamo-nos à disposição para quaisquer esclarecimentos adicionais que se façam
-          necessários.
-        </Text>
-
-        <Text style={s.place}>{data}</Text>
-
-        <View style={s.footer}>
-          <Text style={s.signatureLine}>
-            {nomePresidente || "_______________________"}
-            {"\n"}
-            {cargoPresidente || "Pastor Presidente"}
+          <Text style={s.paragraph}>
+            Apresentamos {destinatario ? `à ${destinatario}` : "a quem possa interessar"}, o
+            irmão(ã) <Text style={{ fontFamily: "Times-Bold" }}>{nomeMembro}</Text>.
           </Text>
+
+          <Text style={s.paragraph}>
+            {papel === "obreiro(a)" ? "Obreiro(a)" : "Membro(a)"} desta Igreja desde {membroDesde}
+            {finalidade ? `, com a finalidade de ${finalidade}` : ""}, e por se achar em plena
+            comunhão com a Igreja, pedimos que o(a) recebais no Senhor, como usam fazer os santos.
+          </Text>
+
+          {observacoes && <Text style={s.obs}>Obs. {observacoes}</Text>}
+
+          <CartaFooter
+            data={data}
+            nomeSecretario={nomeSecretario}
+            cargoSecretario={cargoSecretario}
+            nomePresidente={nomePresidente}
+            cargoPresidente={cargoPresidente}
+            numero={numero}
+          />
         </View>
 
-        <Text style={s.docNumber}>Documento nº {numero}</Text>
+        <WaveBar flip />
       </Page>
     </Document>
   );

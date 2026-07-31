@@ -70,6 +70,7 @@ export type Configuracao = {
   cnpj: string | null;
   logoUrl: string | null;
   enderecoSede: string | null;
+  cidadeSede: string | null;
   telefoneSede: string | null;
   nomePresidente: string | null;
   cargoPresidente: string | null;
@@ -82,6 +83,7 @@ const CONFIGURACAO_PADRAO: Configuracao = {
   cnpj: null,
   logoUrl: null,
   enderecoSede: null,
+  cidadeSede: null,
   telefoneSede: null,
   nomePresidente: null,
   cargoPresidente: "Pastor Presidente",

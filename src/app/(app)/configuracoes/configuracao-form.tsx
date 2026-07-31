@@ -25,6 +25,7 @@ export function ConfiguracaoForm({
     cnpj: string | null;
     logoUrl: string | null;
     enderecoSede: string | null;
+    cidadeSede: string | null;
     telefoneSede: string | null;
     nomePresidente: string | null;
     cargoPresidente: string | null;
@@ -108,6 +109,16 @@ export function ConfiguracaoForm({
             <Field>
               <FieldLabel htmlFor="enderecoSede">Endereço da sede</FieldLabel>
               <Input id="enderecoSede" name="enderecoSede" defaultValue={defaultValues.enderecoSede ?? ""} />
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="cidadeSede">Cidade/UF da sede</FieldLabel>
+              <Input
+                id="cidadeSede"
+                name="cidadeSede"
+                placeholder="Ex: Mandirituba/PR"
+                defaultValue={defaultValues.cidadeSede ?? ""}
+              />
             </Field>
 
             <Field orientation="responsive">

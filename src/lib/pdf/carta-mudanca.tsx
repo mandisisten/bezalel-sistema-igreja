@@ -1,69 +1,85 @@
-import { Document, Page, Text, View, Image } from "@react-pdf/renderer";
-import { letterStyles as s } from "./styles";
+import { Document, Page, Text, View } from "@react-pdf/renderer";
+import { s, WaveBar, CartaHeader, CartaTipoBox, CartaFooter } from "./carta-eclesiastica";
 
 export function CartaMudanca({
   nomeIgreja,
   enderecoSede,
-  telefoneSede,
+  cidadeSede,
   logoPath,
   nomeMembro,
+  congregacaoOrigem,
+  membroDesde,
   congregacaoDestino,
+  interna,
   data,
   motivo,
+  observacoes,
   nomePresidente,
   cargoPresidente,
+  nomeSecretario,
+  cargoSecretario,
   numero,
 }: {
   nomeIgreja: string;
   enderecoSede: string | null;
-  telefoneSede: string | null;
+  cidadeSede: string | null;
   logoPath?: string | null;
   nomeMembro: string;
+  congregacaoOrigem: string;
+  membroDesde: string;
   congregacaoDestino: string;
+  interna: boolean;
   data: string;
   motivo: string | null;
+  observacoes: string | null;
   nomePresidente: string | null;
   cargoPresidente: string | null;
+  nomeSecretario: string | null;
+  cargoSecretario: string | null;
   numero: string;
 }) {
+  const obs = [motivo ? `Motivo: ${motivo}.` : null, observacoes].filter(Boolean).join(" ");
+
   return (
     <Document>
       <Page size="A4" style={s.page}>
-        <View style={s.header}>
-          {logoPath && <Image src={logoPath} style={s.logo} />}
-          <View>
-            <Text style={s.churchName}>{nomeIgreja}</Text>
-            {enderecoSede && <Text style={s.churchDetail}>{enderecoSede}</Text>}
-            {telefoneSede && <Text style={s.churchDetail}>{telefoneSede}</Text>}
-          </View>
-        </View>
+        <WaveBar />
 
-        <Text style={s.title}>Carta de Mudança</Text>
+        <View style={s.body}>
+          <CartaHeader
+            nomeIgreja={nomeIgreja}
+            enderecoSede={enderecoSede}
+            cidadeSede={cidadeSede}
+            logoPath={logoPath}
+          />
 
-        <Text style={s.paragraph}>Prezados irmãos da {congregacaoDestino}, graça e paz.</Text>
+          <CartaTipoBox tipo="MUDANCA" interna={interna} congregacaoOrigem={congregacaoOrigem} />
 
-        <Text style={s.paragraph}>
-          Pela presente, apresentamos e recomendamos à vossa comunhão o(a) irmão(ã){" "}
-          {nomeMembro}, membro(a) desta igreja, que ora se transfere para essa congregação.
-          {motivo ? ` Motivo: ${motivo}.` : ""}
-        </Text>
+          <Text style={s.saudacao}>&ldquo;A Paz do Senhor Jesus&rdquo;</Text>
 
-        <Text style={s.paragraph}>
-          Pedimos que seja recebido(a) com o mesmo amor cristão que sempre demonstrou entre nós,
-          desejando-lhe as bênçãos do Senhor nesta nova caminhada.
-        </Text>
-
-        <Text style={s.place}>{data}</Text>
-
-        <View style={s.footer}>
-          <Text style={s.signatureLine}>
-            {nomePresidente || "_______________________"}
-            {"\n"}
-            {cargoPresidente || "Pastor Presidente"}
+          <Text style={s.paragraph}>
+            Apresentamos à {congregacaoDestino}, o irmão(ã){" "}
+            <Text style={{ fontFamily: "Times-Bold" }}>{nomeMembro}</Text>.
           </Text>
+
+          <Text style={s.paragraph}>
+            Membro(a) desta Igreja desde {membroDesde}, e por se achar em plena comunhão com a
+            Igreja, pedimos que os recebais no Senhor, como usam fazer os santos.
+          </Text>
+
+          {obs && <Text style={s.obs}>Obs. {obs}</Text>}
+
+          <CartaFooter
+            data={data}
+            nomeSecretario={nomeSecretario}
+            cargoSecretario={cargoSecretario}
+            nomePresidente={nomePresidente}
+            cargoPresidente={cargoPresidente}
+            numero={numero}
+          />
         </View>
 
-        <Text style={s.docNumber}>Documento nº {numero}</Text>
+        <WaveBar flip />
       </Page>
     </Document>
   );

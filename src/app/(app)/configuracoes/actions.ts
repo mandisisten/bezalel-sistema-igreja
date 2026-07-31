@@ -38,6 +38,7 @@ export async function updateConfiguracao(formData: FormData, logoAtual: string |
       nomeIgreja,
       cnpj: String(formData.get("cnpj") ?? "") || null,
       enderecoSede: String(formData.get("enderecoSede") ?? "") || null,
+      cidadeSede: String(formData.get("cidadeSede") ?? "") || null,
       telefoneSede: String(formData.get("telefoneSede") ?? "") || null,
       nomePresidente: String(formData.get("nomePresidente") ?? "") || null,
       cargoPresidente: String(formData.get("cargoPresidente") ?? "") || null,

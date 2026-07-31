@@ -39,6 +39,7 @@ function ConfiguracoesContent() {
               cnpj: configuracao.cnpj,
               logoUrl: configuracao.logoUrl,
               enderecoSede: configuracao.enderecoSede,
+              cidadeSede: configuracao.cidadeSede,
               telefoneSede: configuracao.telefoneSede,
               nomePresidente: configuracao.nomePresidente,
               cargoPresidente: configuracao.cargoPresidente,

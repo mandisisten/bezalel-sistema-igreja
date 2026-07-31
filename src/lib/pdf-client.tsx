@@ -1,7 +1,10 @@
 import { pdf } from "@react-pdf/renderer";
 import QRCode from "qrcode";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { emitDocumento } from "@/lib/documento-client";
+import { formatMesAno } from "@/lib/pdf/carta-eclesiastica";
 import type { Configuracao } from "@/lib/firestore-hooks";
 import type { WithId } from "@/lib/firestore-hooks";
 import type { MembroInput } from "@/app/(app)/membros/actions";
@@ -191,28 +194,38 @@ export async function gerarCartaRecomendacao(
 ) {
   const win = abrirJanela();
 
-  const numero = await emitDocumento({
-    tipo: "CARTA_RECOMENDACAO",
-    membroId: carta.membroId,
-    membroNome: carta.membroNome,
-    referenciaId: carta.id,
-    emitidoPorUid: usuario.uid,
-    emitidoPorNome: usuario.nome,
-  });
+  const [numero, membroSnap] = await Promise.all([
+    emitDocumento({
+      tipo: "CARTA_RECOMENDACAO",
+      membroId: carta.membroId,
+      membroNome: carta.membroNome,
+      referenciaId: carta.id,
+      emitidoPorUid: usuario.uid,
+      emitidoPorNome: usuario.nome,
+    }),
+    getDoc(doc(db, "membros", carta.membroId)),
+  ]);
+  const membro = membroSnap.data() as MembroInput | undefined;
 
   const blob = await pdf(
     <CartaRecomendacao
       nomeIgreja={configuracao.nomeIgreja}
       enderecoSede={configuracao.enderecoSede}
-      telefoneSede={configuracao.telefoneSede}
+      cidadeSede={configuracao.cidadeSede}
       logoPath={configuracao.logoUrl}
       nomeMembro={carta.membroNome ?? "—"}
+      congregacaoOrigem={membro?.congregacaoNome ?? "Sede"}
+      membroDesde={formatMesAno(membro?.dataAdmissao?.toDate() ?? null)}
       tipo={carta.tipo}
       destinatario={carta.destinatario}
       finalidade={carta.finalidade}
+      interna={false}
       data={formatDate(carta.data.toDate())}
+      observacoes={carta.observacoes}
       nomePresidente={configuracao.nomePresidente}
       cargoPresidente={configuracao.cargoPresidente}
+      nomeSecretario={configuracao.nomeSecretario}
+      cargoSecretario={configuracao.cargoSecretario}
       numero={numero}
     />,
   ).toBlob();
@@ -227,27 +240,37 @@ export async function gerarCartaMudanca(
 ) {
   const win = abrirJanela();
 
-  const numero = await emitDocumento({
-    tipo: "CARTA_MUDANCA",
-    membroId: carta.membroId,
-    membroNome: carta.membroNome,
-    referenciaId: carta.id,
-    emitidoPorUid: usuario.uid,
-    emitidoPorNome: usuario.nome,
-  });
+  const [numero, membroSnap] = await Promise.all([
+    emitDocumento({
+      tipo: "CARTA_MUDANCA",
+      membroId: carta.membroId,
+      membroNome: carta.membroNome,
+      referenciaId: carta.id,
+      emitidoPorUid: usuario.uid,
+      emitidoPorNome: usuario.nome,
+    }),
+    getDoc(doc(db, "membros", carta.membroId)),
+  ]);
+  const membro = membroSnap.data() as MembroInput | undefined;
 
   const blob = await pdf(
     <CartaMudanca
       nomeIgreja={configuracao.nomeIgreja}
       enderecoSede={configuracao.enderecoSede}
-      telefoneSede={configuracao.telefoneSede}
+      cidadeSede={configuracao.cidadeSede}
       logoPath={configuracao.logoUrl}
       nomeMembro={carta.membroNome ?? "—"}
+      congregacaoOrigem={membro?.congregacaoNome ?? "Sede"}
+      membroDesde={formatMesAno(membro?.dataAdmissao?.toDate() ?? null)}
       congregacaoDestino={carta.congregacaoDestinoNome ?? carta.igrejaDestinoTexto ?? "igreja destino"}
+      interna={!!carta.congregacaoDestinoId}
       data={formatDate(carta.data.toDate())}
       motivo={carta.motivo}
+      observacoes={carta.observacoes}
       nomePresidente={configuracao.nomePresidente}
       cargoPresidente={configuracao.cargoPresidente}
+      nomeSecretario={configuracao.nomeSecretario}
+      cargoSecretario={configuracao.cargoSecretario}
       numero={numero}
     />,
   ).toBlob();
