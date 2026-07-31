@@ -11,55 +11,55 @@ const s = StyleSheet.create({
   },
   cornerTopLeft: {
     position: "absolute",
-    top: 20,
-    left: 20,
+    top: 22,
+    left: 22,
   },
   cornerTopRight: {
     position: "absolute",
-    top: 20,
-    right: 20,
+    top: 22,
+    right: 22,
     transform: "scaleX(-1)",
   },
   content: {
     flex: 1,
     alignItems: "center",
-    paddingTop: 16,
+    paddingTop: 24,
   },
   title: {
-    fontSize: 33,
+    fontSize: 42,
     fontFamily: "Times-Bold",
     letterSpacing: 1,
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 18,
     letterSpacing: 3,
-    marginTop: 2,
+    marginTop: 4,
   },
   ornamentDivider: {
-    marginTop: 8,
+    marginTop: 14,
   },
   declara: {
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 2,
-    marginTop: 10,
+    marginTop: 18,
   },
   nomeMembro: {
-    fontSize: 23,
+    fontSize: 28,
     fontFamily: "Times-Bold",
-    marginTop: 8,
-    marginBottom: 10,
+    marginTop: 18,
+    marginBottom: 18,
   },
   divider: {
     borderTopWidth: 1,
     borderTopColor: navy,
     width: "100%",
     marginTop: 2,
-    marginBottom: 13,
+    marginBottom: 26,
   },
   paragraph: {
     width: "100%",
-    fontSize: 13,
-    lineHeight: 1.5,
+    fontSize: 13.5,
+    lineHeight: 1.7,
     textAlign: "center",
     paddingHorizontal: 55,
   },
@@ -69,28 +69,28 @@ const s = StyleSheet.create({
   quote: {
     width: "100%",
     fontFamily: "Times-Italic",
-    fontSize: 12,
-    lineHeight: 1.4,
+    fontSize: 12.5,
+    lineHeight: 1.6,
     textAlign: "center",
     paddingHorizontal: 55,
-    marginTop: 14,
+    marginTop: 26,
   },
   referencia: {
     fontFamily: "Times-Bold",
-    fontSize: 9,
+    fontSize: 10,
     letterSpacing: 1,
     color: gold,
-    marginTop: 6,
+    marginTop: 10,
   },
   footer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: "auto",
-    paddingTop: 10,
+    paddingTop: 30,
   },
   signatureBlock: {
-    width: 180,
+    width: 190,
     alignItems: "center",
   },
   signatureLine: {
@@ -110,16 +110,23 @@ const s = StyleSheet.create({
   },
   churchBlock: {
     alignItems: "center",
+    gap: 3,
   },
   churchLogo: {
-    width: 200,
-    height: 200,
+    width: 46,
+    height: 46,
     objectFit: "contain",
+  },
+  churchName: {
+    fontFamily: "Times-Bold",
+    fontSize: 10,
+    letterSpacing: 1,
+    textAlign: "center",
   },
   docNumber: {
     position: "absolute",
-    bottom: 10,
-    right: 20,
+    bottom: 12,
+    right: 22,
     fontSize: 7,
     color: gold,
   },
@@ -127,33 +134,37 @@ const s = StyleSheet.create({
 
 function CornerOrnament({ mirrored }: { mirrored?: boolean }) {
   return (
-    <Svg width={60} height={60} style={mirrored ? s.cornerTopRight : s.cornerTopLeft}>
+    <Svg width={64} height={64} style={mirrored ? s.cornerTopRight : s.cornerTopLeft}>
       <Path
-        d="M2 20 Q2 2 20 2 L52 2"
+        d="M3 26 Q3 3 26 3 L58 3"
         stroke={gold}
         strokeWidth={1.2}
         fill="none"
       />
-      <Path d="M2 20 L2 40" stroke={gold} strokeWidth={1.2} />
-      <Circle cx={2} cy={46} r={2.2} fill={gold} />
-      <Circle cx={58} cy={2} r={2.2} fill={gold} />
+      <Path d="M3 26 Q3 34 11 34" stroke={gold} strokeWidth={1.2} fill="none" />
+      <Path d="M50 3 Q58 3 58 11" stroke={gold} strokeWidth={1.2} fill="none" />
+      <Circle cx={3} cy={41} r={2.4} fill={gold} />
+      <Circle cx={63} cy={3} r={2.4} fill={gold} />
+      <Circle cx={16} cy={38} r={1.4} fill={gold} />
+      <Circle cx={45} cy={9} r={1.4} fill={gold} />
     </Svg>
   );
 }
 
 function OrnamentDivider() {
   return (
-    <Svg width={90} height={10} style={s.ornamentDivider}>
-      <Path d="M0 5 H32" stroke={gold} strokeWidth={1} />
-      <Circle cx={39} cy={5} r={2} fill={gold} />
-      <Circle cx={45} cy={5} r={2.6} fill={gold} />
-      <Circle cx={51} cy={5} r={2} fill={gold} />
-      <Path d="M58 5 H90" stroke={gold} strokeWidth={1} />
+    <Svg width={100} height={12} style={s.ornamentDivider}>
+      <Path d="M0 6 H36" stroke={gold} strokeWidth={1} />
+      <Circle cx={44} cy={6} r={2} fill={gold} />
+      <Path d="M50 6 a6 6 0 1 1 0 0.01" stroke={gold} strokeWidth={1} fill="none" />
+      <Circle cx={56} cy={6} r={2} fill={gold} />
+      <Path d="M64 6 H100" stroke={gold} strokeWidth={1} />
     </Svg>
   );
 }
 
 export function CertificadoBatismo({
+  nomeIgreja,
   logoPath,
   nomeMembro,
   data,
@@ -165,6 +176,7 @@ export function CertificadoBatismo({
   cargoSecretario,
   numero,
 }: {
+  nomeIgreja: string;
   logoPath?: string | null;
   nomeMembro: string;
   data: string;
@@ -216,6 +228,7 @@ export function CertificadoBatismo({
 
             <View style={s.churchBlock}>
               {logoPath && <Image src={logoPath} style={s.churchLogo} />}
+              <Text style={s.churchName}>{nomeIgreja.toUpperCase()}</Text>
             </View>
 
             <View style={s.signatureBlock}>
