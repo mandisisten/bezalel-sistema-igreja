@@ -42,6 +42,8 @@ function ConfiguracoesContent() {
               telefoneSede: configuracao.telefoneSede,
               nomePresidente: configuracao.nomePresidente,
               cargoPresidente: configuracao.cargoPresidente,
+              nomeSecretario: configuracao.nomeSecretario,
+              cargoSecretario: configuracao.cargoSecretario,
             }}
           />
         </CardContent>

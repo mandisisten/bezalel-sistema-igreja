@@ -73,6 +73,8 @@ export type Configuracao = {
   telefoneSede: string | null;
   nomePresidente: string | null;
   cargoPresidente: string | null;
+  nomeSecretario: string | null;
+  cargoSecretario: string | null;
 };
 
 const CONFIGURACAO_PADRAO: Configuracao = {
@@ -83,6 +85,8 @@ const CONFIGURACAO_PADRAO: Configuracao = {
   telefoneSede: null,
   nomePresidente: null,
   cargoPresidente: "Pastor Presidente",
+  nomeSecretario: null,
+  cargoSecretario: "1º Secretário",
 };
 
 export function useConfiguracao() {

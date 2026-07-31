@@ -28,6 +28,8 @@ export function ConfiguracaoForm({
     telefoneSede: string | null;
     nomePresidente: string | null;
     cargoPresidente: string | null;
+    nomeSecretario: string | null;
+    cargoSecretario: string | null;
   };
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +125,25 @@ export function ConfiguracaoForm({
                   id="cargoPresidente"
                   name="cargoPresidente"
                   defaultValue={defaultValues.cargoPresidente ?? "Pastor Presidente"}
+                />
+              </Field>
+            </Field>
+
+            <Field orientation="responsive">
+              <Field>
+                <FieldLabel htmlFor="nomeSecretario">Nome do secretário</FieldLabel>
+                <Input
+                  id="nomeSecretario"
+                  name="nomeSecretario"
+                  defaultValue={defaultValues.nomeSecretario ?? ""}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="cargoSecretario">Cargo (para assinatura)</FieldLabel>
+                <Input
+                  id="cargoSecretario"
+                  name="cargoSecretario"
+                  defaultValue={defaultValues.cargoSecretario ?? "1º Secretário"}
                 />
               </Field>
             </Field>

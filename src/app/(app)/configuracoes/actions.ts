@@ -41,6 +41,8 @@ export async function updateConfiguracao(formData: FormData, logoAtual: string |
       telefoneSede: String(formData.get("telefoneSede") ?? "") || null,
       nomePresidente: String(formData.get("nomePresidente") ?? "") || null,
       cargoPresidente: String(formData.get("cargoPresidente") ?? "") || null,
+      nomeSecretario: String(formData.get("nomeSecretario") ?? "") || null,
+      cargoSecretario: String(formData.get("cargoSecretario") ?? "") || null,
       ...(logoUrl ? { logoUrl } : {}),
       updatedAt: new Date(),
     },

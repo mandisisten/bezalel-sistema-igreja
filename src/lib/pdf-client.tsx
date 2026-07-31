@@ -97,7 +97,6 @@ export async function gerarCertificadoBatismo(
   const blob = await pdf(
     <CertificadoBatismo
       nomeIgreja={configuracao.nomeIgreja}
-      enderecoSede={configuracao.enderecoSede}
       logoPath={configuracao.logoUrl}
       nomeMembro={batismo.membroNome ?? "—"}
       data={formatDate(batismo.data.toDate())}
@@ -105,6 +104,8 @@ export async function gerarCertificadoBatismo(
       oficiante={batismo.oficiante}
       nomePresidente={configuracao.nomePresidente}
       cargoPresidente={configuracao.cargoPresidente}
+      nomeSecretario={configuracao.nomeSecretario}
+      cargoSecretario={configuracao.cargoSecretario}
       numero={numero}
     />,
   ).toBlob();
