@@ -23,7 +23,7 @@ const s = StyleSheet.create({
   content: {
     flex: 1,
     alignItems: "center",
-    paddingTop: 24,
+    paddingTop: 18,
   },
   title: {
     fontSize: 42,
@@ -41,20 +41,20 @@ const s = StyleSheet.create({
   declara: {
     fontSize: 11,
     letterSpacing: 2,
-    marginTop: 18,
+    marginTop: 14,
   },
   nomeMembro: {
     fontSize: 28,
     fontFamily: "Times-Bold",
-    marginTop: 18,
-    marginBottom: 18,
+    marginTop: 14,
+    marginBottom: 14,
   },
   divider: {
     borderTopWidth: 1,
     borderTopColor: navy,
     width: "100%",
     marginTop: 2,
-    marginBottom: 26,
+    marginBottom: 20,
   },
   paragraph: {
     width: "100%",
@@ -73,7 +73,7 @@ const s = StyleSheet.create({
     lineHeight: 1.6,
     textAlign: "center",
     paddingHorizontal: 55,
-    marginTop: 26,
+    marginTop: 12,
   },
   referencia: {
     fontFamily: "Times-Bold",
@@ -87,7 +87,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: "auto",
-    paddingTop: 30,
+    paddingTop: 18,
   },
   signatureBlock: {
     width: 190,
@@ -110,18 +110,11 @@ const s = StyleSheet.create({
   },
   churchBlock: {
     alignItems: "center",
-    gap: 3,
   },
   churchLogo: {
-    width: 46,
-    height: 46,
+    width: 138,
+    height: 138,
     objectFit: "contain",
-  },
-  churchName: {
-    fontFamily: "Times-Bold",
-    fontSize: 10,
-    letterSpacing: 1,
-    textAlign: "center",
   },
   docNumber: {
     position: "absolute",
@@ -228,7 +221,6 @@ export function CertificadoBatismo({
 
             <View style={s.churchBlock}>
               {logoPath && <Image src={logoPath} style={s.churchLogo} />}
-              <Text style={s.churchName}>{nomeIgreja.toUpperCase()}</Text>
             </View>
 
             <View style={s.signatureBlock}>
